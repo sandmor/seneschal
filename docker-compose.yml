@@ -1,0 +1,31 @@
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    ports:
+      - '${BACKEND_PORT:-8000}:${BACKEND_PORT:-8000}'
+    environment:
+      - PORT=${BACKEND_PORT:-8000}
+      - PUBLIC_FRONTEND_URL=${PUBLIC_FRONTEND_URL:-http://localhost:3000}
+    networks:
+      - app-network
+
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+    ports:
+      - '${FRONTEND_PORT:-3000}:${FRONTEND_PORT:-3000}'
+    environment:
+      - PORT=${FRONTEND_PORT:-3000}
+      - INTERNAL_API_URL=${INTERNAL_API_URL:-http://backend:8000}
+      - VITE_PUBLIC_API_URL=${VITE_PUBLIC_API_URL:-http://localhost:8000}
+    depends_on:
+      - backend
+    networks:
+      - app-network
+
+networks:
+  app-network:
+    driver: bridge

@@ -1,0 +1,26 @@
+{
+  "name": "seneschal",
+  "private": true,
+  "packageManager": "bun@1.3.6",
+  "workspaces": [
+    "frontend"
+  ],
+  "scripts": {
+    "build:frontend": "bun run --cwd frontend build",
+    "format": "bun run format:py && bun run format:web",
+    "format:check": "bun run format:check:py && bun run format:check:web",
+    "format:py": "uv run ruff format backend",
+    "format:check:py": "uv run ruff format --check backend",
+    "format:web": "prettier --write . --ignore-unknown",
+    "format:check:web": "prettier --check . --ignore-unknown",
+    "lint": "bun run lint:py && bun run lint:frontend",
+    "lint:py": "uv run ruff check backend",
+    "lint:frontend": "bun run --cwd frontend typecheck",
+    "orval": "./scripts/run-orval.sh",
+    "smoke": "./scripts/smoke-local.sh",
+    "smoke:docker": "./scripts/smoke-docker.sh"
+  },
+  "devDependencies": {
+    "prettier": "^3.8.3"
+  }
+}

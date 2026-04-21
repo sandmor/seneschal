@@ -1,0 +1,6 @@
+.venv/
+node_modules/
+frontend/node_modules/
+frontend/dist/
+frontend/src/api/
+frontend/src/routeTree.gen.ts
