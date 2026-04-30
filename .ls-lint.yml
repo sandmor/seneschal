@@ -1,0 +1,19 @@
+ls:
+  frontend/src:
+    .dir: kebab-case
+    .ts: kebab-case
+    .tsx: kebab-case | regex:__root
+    .d.ts: kebab-case
+    .css: kebab-case
+
+  backend/src:
+    .dir: snake_case
+    .py: snake_case
+
+ignore:
+  - .git
+  - node_modules
+  - frontend/node_modules
+  - frontend/dist
+  - frontend/src/api/**
+  - frontend/src/*.gen.ts

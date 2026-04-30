@@ -97,10 +97,13 @@ bun run format
 bun run format:check
 ```
 
-Linting is intentionally light-touch and focuses on correctness:
+Linting enforces naming conventions and correctness for both languages:
 
-- Python: `ruff check`
-- Frontend: TypeScript type-checking
+- **Python** (`ruff check`): classes must be `PascalCase`; functions, methods, and variables must be `snake_case`
+- **Frontend** (`eslint` + `tsc`): types, interfaces, and React components must be `PascalCase`; functions and variables must be `camelCase`; constants may be `UPPER_CASE`.
+- **Files** (`ls-lint` via `bun run lint:files`): frontend source files in `frontend/src` must use `kebab-case`; backend Python modules in `backend/src` must use `snake_case`.
+
+Auto-generated code and framework-reserved names (for example TanStack Router's `__root.tsx`) are excluded where needed through `.ls-lint.yml`.
 
 Run both:
 

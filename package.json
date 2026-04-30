@@ -13,14 +13,16 @@
     "format:check:py": "uv run ruff format --check backend",
     "format:web": "prettier --write . --ignore-unknown",
     "format:check:web": "prettier --check . --ignore-unknown",
-    "lint": "bun run lint:py && bun run lint:frontend",
+    "lint": "bun run lint:files && bun run lint:py && bun run lint:frontend",
+    "lint:files": "ls-lint",
     "lint:py": "uv run ruff check backend",
-    "lint:frontend": "bun run --cwd frontend typecheck",
+    "lint:frontend": "bun run --cwd frontend lint && bun run --cwd frontend typecheck",
     "orval": "./scripts/run-orval.sh",
     "smoke": "./scripts/smoke-local.sh",
     "smoke:docker": "./scripts/smoke-docker.sh"
   },
   "devDependencies": {
+    "@ls-lint/ls-lint": "^2.3.1",
     "prettier": "^3.8.3"
   }
 }
