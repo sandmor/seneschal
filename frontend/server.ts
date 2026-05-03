@@ -1,10 +1,13 @@
 import express, { Request, Response, NextFunction } from 'express';
+import { config } from 'dotenv';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createMemoryHistory } from '@tanstack/react-router';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+config({ path: path.resolve(__dirname, '../.env') });
+
 const app = express();
 
 app.use(express.static(path.resolve(__dirname, './dist/client'), { index: false }));

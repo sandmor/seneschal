@@ -1,5 +1,26 @@
+export class ApiError extends Error {
+  status: number;
+  payload: unknown;
+
+  constructor(message: string, status: number, payload: unknown) {
+    super(message);
+    this.name = 'ApiError';
+    this.status = status;
+    this.payload = payload;
+  }
+}
+
+function resolveBrowserBaseUrl() {
+  if (typeof window === 'undefined') {
+    return undefined;
+  }
+
+  return PUBLIC_API_URL || undefined;
+}
+
 function resolveBaseUrl() {
   return (
+    resolveBrowserBaseUrl() ??
     process.env.INTERNAL_API_URL ??
     process.env.VITE_PUBLIC_API_URL ??
     process.env.OPENAPI_URL?.replace(/\/openapi\.json$/, '') ??
@@ -11,14 +32,33 @@ export async function customInstance<T>(url: string, options?: RequestInit): Pro
   const response = await fetch(new URL(url, resolveBaseUrl()), {
     ...options,
     headers: {
-      'Content-Type': 'application/json',
       ...(options?.headers ?? {}),
     },
   });
 
+  const contentType = response.headers.get('content-type') ?? '';
+  const payload =
+    response.status === 204
+      ? undefined
+      : contentType.includes('application/json')
+        ? ((await response.json()) as unknown)
+        : ((await response.text()) as unknown);
+
   if (!response.ok) {
-    throw new Error(`Request failed with status ${response.status}`);
+    const detail =
+      typeof payload === 'object' &&
+      payload !== null &&
+      'detail' in payload &&
+      typeof payload.detail === 'string'
+        ? payload.detail
+        : `Request failed with status ${response.status}`;
+
+    throw new ApiError(detail, response.status, payload);
   }
 
-  return (await response.json()) as T;
+  return {
+    data: payload,
+    headers: response.headers,
+    status: response.status,
+  } as T;
 }

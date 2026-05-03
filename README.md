@@ -20,6 +20,10 @@ Default ports:
 - Frontend: `3000`
 - Backend: `8000`
 
+Default storage:
+
+- Backend data directory: `./data` locally, `/app/data` in Docker
+
 ## Setup Without Docker
 
 Install Python and frontend dependencies:
