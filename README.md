@@ -35,26 +35,24 @@ Generate the Orval client from the running backend schema:
 bun run orval
 ```
 
-## Run Without Docker
+## Development Without Docker
 
-Start the backend in one terminal:
+Use the repo-level development commands from the project root:
 
 ```bash
-PUBLIC_FRONTEND_URL=http://127.0.0.1:3000 \
-uv run --package backend uvicorn --app-dir backend src.main:app --reload --host 127.0.0.1 --port 8000
+bun run dev
 ```
 
-Build and start the frontend SSR server in a second terminal:
+That starts:
+
+- FastAPI with auto-reload on `http://127.0.0.1:8000`
+- Vite frontend dev server on `http://127.0.0.1:3000`
+
+If you only want one side:
 
 ```bash
-cd frontend
-INTERNAL_API_URL=http://127.0.0.1:8000 \
-VITE_PUBLIC_API_URL=http://127.0.0.1:8000 \
-bun run build
-
-INTERNAL_API_URL=http://127.0.0.1:8000 \
-VITE_PUBLIC_API_URL=http://127.0.0.1:8000 \
-bun run start
+bun run dev:backend
+bun run dev:frontend
 ```
 
 Open:
