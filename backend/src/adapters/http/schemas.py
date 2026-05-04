@@ -27,6 +27,7 @@ class AdminProfileSchema(BaseModel):
             roles=profile.roles,
         )
 
+
 class UserSchema(BaseModel):
     id: int
     name: str
@@ -34,9 +35,4 @@ class UserSchema(BaseModel):
 
     @classmethod
     def from_domain(cls, user: User) -> "UserSchema":
-        return cls(
-            id=user.id, 
-            name=user.name, 
-            roles=user.roles
-        )
-
+        return cls(id=user.id, name=user.name, roles=user.roles)

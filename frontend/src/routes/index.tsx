@@ -45,10 +45,10 @@ function useStoredToken() {
 }
 
 export const Route = createFileRoute('/')({
-  component: Home,
+  component: home,
 });
 
-function Home() {
+function home() {
   const [token, setToken] = useStoredToken();
   const [profile, setProfile] = useState<AdminProfile | null>(null);
   const [username, setUsername] = useState('');
@@ -145,8 +145,12 @@ function Home() {
       <div className="mx-auto flex w-full max-w-4xl flex-col gap-10">
         <header className="space-y-2">
           <span className="sr-only">Welcome Home!</span>
-          <p className="text-sm font-semibold uppercase tracking-[0.3em] text-emerald-600">Seneschal</p>
-          <h1 className="text-3xl font-semibold text-foreground sm:text-4xl">Panel de superadmin</h1>
+          <p className="text-sm font-semibold uppercase tracking-[0.3em] text-emerald-600">
+            Seneschal
+          </p>
+          <h1 className="text-3xl font-semibold text-foreground sm:text-4xl">
+            Panel de superadmin
+          </h1>
           <p className="text-base text-muted-foreground">
             Inicia sesion para entrar al panel. Este acceso es solo para pruebas locales.
           </p>
@@ -208,7 +212,7 @@ function Home() {
                   required
                 />
               </div>
-              {error ? <p className="text-sm font-medium text-red-500">{error}</p> : ""}
+              {error ? <p className="text-sm font-medium text-red-500">{error}</p> : ''}
               <button
                 type="submit"
                 className="w-full rounded-2xl bg-emerald-600 px-4 py-3 text-base font-semibold text-white shadow-sm transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"

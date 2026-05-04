@@ -1,5 +1,6 @@
 from typing import Protocol
 
+
 # TODO: Replace this with a DB-backed implementation.
 class TokenStore(Protocol):
     def add(self, token: str) -> None:

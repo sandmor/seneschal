@@ -1,5 +1,3 @@
-import os
-
 from fastapi import Depends, Header, HTTPException
 
 from src.adapters.storage.in_memory_token_store import InMemoryTokenStore
@@ -19,6 +17,7 @@ _USER_SERVICE = UserService()
 
 def get_token_store() -> TokenStore:
     return _TOKEN_STORE
+
 
 def get_auth_service() -> AuthService:
     return _AUTH_SERVICE

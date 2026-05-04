@@ -6,6 +6,7 @@ from src.core.application.user_service import UserService
 
 router = APIRouter(prefix="/api", tags=["users"])
 
+
 # Template, reemplace later
 @router.get("/users", response_model=list[UserSchema])
 async def get_users(user_service: UserService = Depends(get_user_service)) -> list[UserSchema]:

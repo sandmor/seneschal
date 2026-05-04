@@ -22,7 +22,10 @@ export async function apiFetch<T>(path: string, options?: RequestInit): Promise<
   }
 
   if (!response.ok) {
-    const message = typeof data?.detail === 'string' ? data.detail : `Request failed with status ${response.status}`;
+    const message =
+      typeof data?.detail === 'string'
+        ? data.detail
+        : `Request failed with status ${response.status}`;
     throw new Error(message);
   }
 

@@ -7,6 +7,7 @@ from src.core.domain.errors import InvalidCredentialsError
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
+
 # TODO: Reemplaze with an actual BD
 @router.post("/login", response_model=LoginResponseSchema)
 async def login(
@@ -41,5 +42,3 @@ async def get_profile(
 ) -> AdminProfileSchema:
     profile = auth_service.get_admin_profile()
     return AdminProfileSchema.from_domain(profile)
-
-
