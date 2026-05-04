@@ -42,7 +42,7 @@ jobs:
         run: bun run lint
 
       - name: Local smoke test
-        run: ./scripts/smoke-local.sh
+        run: bun run smoke
 
       - name: Docker smoke test
-        run: ./scripts/smoke-docker.sh
+        run: bun run smoke:docker
