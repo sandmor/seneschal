@@ -68,6 +68,13 @@ If you just want the verified local smoke path instead of starting both processe
 bun run smoke
 ```
 
+If you want a single command to start backend + frontend in dev mode:
+
+```bash
+chmod +x scripts/dev-start.sh
+./scripts/dev-start.sh
+```
+
 ## Run With Docker
 
 Build and start both services:
