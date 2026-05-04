@@ -1,13 +1,19 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { QueryClient, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from '@tanstack/react-router';
-import { AppShell, InspectorPanel } from '@/components/app-shell';
+import { AppShell } from '@/components/app-shell';
+import { InspectorPanel } from '@/components/inspector-panel';
 import { Sidebar } from '@/components/sidebar';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
+import { ExplorerRow } from '@/features/document-browser/explorer-row';
+import { DirectoryInspector } from '@/features/document-browser/directory-inspector';
+import {
+  DocumentEditor,
+  DocumentEditorSkeleton,
+} from '@/features/document-browser/document-editor';
+import { useDebounce } from '@/features/document-browser/hooks/use-debounce';
+import { FolderPlusIcon, FilePlusIcon } from '@/features/document-browser/icons';
 import {
   createDirectory,
   createDocument,
@@ -15,9 +21,6 @@ import {
   deleteDocument,
   directoryQueryKey,
   documentQueryKey,
-  ExplorerDirectory,
-  ExplorerDocument,
-  ExplorerNode,
   getApiErrorMessage,
   getDirectory,
   getDocument,
@@ -34,12 +37,12 @@ import {
 } from '@/features/document-browser/path-utils';
 import { cn } from '@/lib/utils';
 
-type ExplorerShellProps = {
+export type ExplorerShellProps = {
   directoryPath: string;
   documentPath?: string;
 };
 
-type StatusTone = 'default' | 'error';
+type StatusTone = 'default' | 'error' | 'saving';
 
 type StatusState = {
   message: string;
@@ -49,19 +52,22 @@ type StatusState = {
 /**
  * ExplorerShell is the main container for the document browser.
  * It manages the state and interactions for browsing directories, viewing and editing documents.
+ *
+ * When a document is selected, the view switches to a full-window editor.
+ * The inspector panel only shows for directory operations.
  */
 export function ExplorerShell({ directoryPath, documentPath }: ExplorerShellProps) {
   const navigate = useNavigate({ from: '/' });
   const queryClient = useQueryClient();
   const [newDirectoryName, setNewDirectoryName] = useState('');
-  const [newDocumentName, setNewDocumentName] = useState('');
-  const [newDocumentContent, setNewDocumentContent] = useState('# ');
   const [directoryName, setDirectoryName] = useState('');
   const [documentName, setDocumentName] = useState('');
   const [documentContent, setDocumentContent] = useState('');
   const [status, setStatus] = useState<StatusState>(null);
   const [inspectorOpen, setInspectorOpen] = useState(false);
-  const [newDocDialogOpen, setNewDocDialogOpen] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [editorKey, setEditorKey] = useState(0);
+  const hasUnsavedChangesRef = useRef(false);
 
   const directoryQuery = useQuery({
     queryKey: directoryQueryKey(directoryPath),
@@ -79,21 +85,57 @@ export function ExplorerShell({ directoryPath, documentPath }: ExplorerShellProp
   const breadcrumbs = useMemo(() => getBreadcrumbs(directoryPath), [directoryPath]);
   const rootDocumentsBlocked = directoryPath === '/';
 
+  // Debounced content for auto-save
+  const debouncedContent = useDebounce(documentContent, 800);
+
+  // Update directory name when directory changes
   useEffect(() => {
     if (!currentDirectory) return;
     setDirectoryName(currentDirectory.path === '/' ? '' : getPathName(currentDirectory.path));
   }, [currentDirectory]);
 
+  const syncedEditorKeyRef = useRef(-1);
+
+  // Update document state when document is selected
   useEffect(() => {
     if (!selectedDocument) {
       setDocumentName('');
       setDocumentContent('');
+      hasUnsavedChangesRef.current = false;
+      syncedEditorKeyRef.current = -1;
       return;
     }
-    setDocumentName(stripMarkdownExtension(selectedDocument.name));
-    setDocumentContent(selectedDocument.content);
-    setInspectorOpen(true);
-  }, [selectedDocument]);
+
+    // Only sync incoming document data once per explicitly initiated session
+    // This prevents clobbering what the user is currently typing during renames
+    if (syncedEditorKeyRef.current !== editorKey) {
+      setDocumentName(stripMarkdownExtension(selectedDocument.name));
+      setDocumentContent(selectedDocument.content);
+      hasUnsavedChangesRef.current = false;
+      syncedEditorKeyRef.current = editorKey;
+    }
+  }, [selectedDocument, editorKey]);
+
+  // Auto-save: content changes
+  useEffect(() => {
+    if (!selectedDocument || !hasUnsavedChangesRef.current) return;
+    if (debouncedContent !== selectedDocument.content) {
+      handleSaveDocument(debouncedContent, undefined);
+    }
+  }, [debouncedContent, selectedDocument]);
+
+  // Warn about unsaved changes on page unload
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (hasUnsavedChangesRef.current) {
+        e.preventDefault();
+        e.returnValue = '';
+        return '';
+      }
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, []);
 
   const createDirectoryMutation = useMutation({
     mutationFn: createDirectory,
@@ -109,9 +151,6 @@ export function ExplorerShell({ directoryPath, documentPath }: ExplorerShellProp
     mutationFn: ({ path, content }: { path: string; content: string }) =>
       createDocument(path, content),
     onSuccess: async (document) => {
-      setNewDocumentName('');
-      setNewDocumentContent('# ');
-      setNewDocDialogOpen(false);
       await Promise.all([
         refreshDirectory(document.parent_path, queryClient),
         queryClient.invalidateQueries({ queryKey: documentQueryKey(document.path) }),
@@ -125,7 +164,14 @@ export function ExplorerShell({ directoryPath, documentPath }: ExplorerShellProp
         }),
       });
     },
-    onError: (error) => setStatus({ message: getApiErrorMessage(error), tone: 'error' }),
+    onError: (error) => {
+      const message = getApiErrorMessage(error);
+      if (message.toLowerCase().includes('already exists')) {
+        setStatus({ message: 'A document with that name already exists.', tone: 'error' });
+      } else {
+        setStatus({ message, tone: 'error' });
+      }
+    },
   });
 
   const updateDirectoryMutation = useMutation({
@@ -172,21 +218,52 @@ export function ExplorerShell({ directoryPath, documentPath }: ExplorerShellProp
       newPath?: string;
     }) => updateDocument(path, { content, newPath }),
     onSuccess: async (document, variables) => {
+      setIsSaving(false);
+      hasUnsavedChangesRef.current = false;
+
+      // Pre-populate query cache for the new path if renamed,
+      // avoiding a flash where we drop back to the explorer list on rename navigation
+      if (variables.newPath && variables.newPath !== variables.path) {
+        queryClient.setQueryData(documentQueryKey(document.path), document);
+      }
+
       await Promise.all([
         refreshDirectory(document.parent_path, queryClient),
         refreshDirectory(getParentPath(variables.path), queryClient),
         queryClient.invalidateQueries({ queryKey: documentQueryKey(document.path) }),
       ]);
-      setStatus({ message: 'Document updated.', tone: 'default' });
-      void navigate({
-        search: (previous) => ({
-          ...previous,
-          path: document.parent_path,
-          document: document.path,
-        }),
-      });
+      if (variables.newPath && variables.newPath !== variables.path) {
+        // Document was renamed, navigate to new path
+        void navigate({
+          replace: true,
+          resetScroll: false,
+          search: (previous) => ({
+            ...previous,
+            path: document.parent_path,
+            document: document.path,
+          }),
+        });
+      } else {
+        // Only show badge when normally saving, not on silent rename auto-saves
+        setStatus({ message: 'Saved.', tone: 'default' });
+        setTimeout(
+          () =>
+            setStatus((prev) =>
+              prev?.tone === 'default' && prev.message === 'Saved.' ? null : prev,
+            ),
+          2000,
+        );
+      }
     },
-    onError: (error) => setStatus({ message: getApiErrorMessage(error), tone: 'error' }),
+    onError: (error) => {
+      setIsSaving(false);
+      const message = getApiErrorMessage(error);
+      if (message.toLowerCase().includes('already exists')) {
+        setStatus({ message: 'A document with that name already exists.', tone: 'error' });
+      } else {
+        setStatus({ message, tone: 'error' });
+      }
+    },
   });
 
   const deleteDocumentMutation = useMutation({
@@ -197,7 +274,6 @@ export function ExplorerShell({ directoryPath, documentPath }: ExplorerShellProp
         refreshDirectory(parentPath, queryClient),
         queryClient.removeQueries({ queryKey: documentQueryKey(path) }),
       ]);
-      setInspectorOpen(false);
       setStatus({ message: 'Document deleted.', tone: 'default' });
       void navigate({
         search: (previous) => ({ ...previous, path: parentPath, document: undefined }),
@@ -212,13 +288,15 @@ export function ExplorerShell({ directoryPath, documentPath }: ExplorerShellProp
     updateDirectoryMutation.isPending ||
     deleteDirectoryMutation.isPending ||
     updateDocumentMutation.isPending ||
-    deleteDocumentMutation.isPending;
+    deleteDocumentMutation.isPending ||
+    isSaving;
 
   const handleOpenDirectory = (path: string) => {
     void navigate({ search: (previous) => ({ ...previous, path, document: undefined }) });
   };
 
   const handleOpenDocument = (path: string) => {
+    setEditorKey((prev) => prev + 1);
     void navigate({
       search: (previous) => ({ ...previous, path: getParentPath(path), document: path }),
     });
@@ -232,16 +310,32 @@ export function ExplorerShell({ directoryPath, documentPath }: ExplorerShellProp
     createDirectoryMutation.mutate(joinPath(directoryPath, newDirectoryName));
   };
 
+  // Find unique name for new document
+  const findUniqueDocumentName = useCallback(
+    (baseName: string): string => {
+      if (!currentDirectory) return `${baseName}.md`;
+
+      const names = new Set(currentDirectory.children.map((c) => c.name.toLowerCase()));
+      let counter = 1;
+      let candidate = `${baseName}.md`;
+
+      while (names.has(candidate.toLowerCase())) {
+        candidate = `${baseName} ${counter}.md`;
+        counter++;
+      }
+
+      return candidate;
+    },
+    [currentDirectory],
+  );
+
   const handleCreateDocument = () => {
-    const normalizedName = ensureMarkdownExtension(newDocumentName);
-    if (!normalizedName) {
-      setStatus({ message: 'Document name is required.', tone: 'error' });
-      return;
-    }
+    const uniqueName = findUniqueDocumentName('Untitled');
     createDocumentMutation.mutate({
-      path: joinPath(directoryPath, normalizedName),
-      content: newDocumentContent,
+      path: joinPath(directoryPath, uniqueName),
+      content: '',
     });
+    setEditorKey((prev) => prev + 1);
   };
 
   const handleUpdateDirectory = () => {
@@ -261,17 +355,14 @@ export function ExplorerShell({ directoryPath, documentPath }: ExplorerShellProp
     deleteDirectoryMutation.mutate({ path: currentDirectory.path, recursive: true });
   };
 
-  const handleSaveDocument = () => {
+  const handleSaveDocument = (content?: string, newPath?: string) => {
     if (!selectedDocument) return;
-    const normalizedName = ensureMarkdownExtension(documentName);
-    if (!normalizedName) {
-      setStatus({ message: 'Document name is required.', tone: 'error' });
-      return;
-    }
+    setIsSaving(true);
+    setStatus({ message: 'Saving...', tone: 'saving' });
     updateDocumentMutation.mutate({
       path: selectedDocument.path,
-      content: documentContent,
-      newPath: joinPath(selectedDocument.parent_path, normalizedName),
+      content,
+      newPath,
     });
   };
 
@@ -282,8 +373,36 @@ export function ExplorerShell({ directoryPath, documentPath }: ExplorerShellProp
 
   const closeInspector = useCallback(() => {
     setInspectorOpen(false);
+  }, []);
+
+  const handleDocumentContentChange = (content: string) => {
+    setDocumentContent(content);
+    hasUnsavedChangesRef.current = true;
+    if (status?.tone === 'default') setStatus(null);
+  };
+
+  const handleDocumentNameChange = (name: string) => {
+    setDocumentName(name);
+    hasUnsavedChangesRef.current = true;
+    if (status?.tone === 'default') setStatus(null);
+  };
+
+  const handleBackToExplorer = () => {
     void navigate({ search: (previous) => ({ ...previous, document: undefined }) });
-  }, [navigate]);
+  };
+
+  const handleDocumentNameBlur = () => {
+    if (!selectedDocument) return;
+    const normalizedName = ensureMarkdownExtension(documentName);
+    if (!normalizedName) {
+      setDocumentName(stripMarkdownExtension(selectedDocument.name));
+      return;
+    }
+    const newPath = joinPath(selectedDocument.parent_path, normalizedName);
+    if (newPath !== selectedDocument.path) {
+      handleSaveDocument(undefined, newPath);
+    }
+  };
 
   const sidebarContent = (
     <Sidebar
@@ -295,7 +414,39 @@ export function ExplorerShell({ directoryPath, documentPath }: ExplorerShellProp
     />
   );
 
-  const inspectorTitle = selectedDocument ? 'Document inspector' : 'Directory controls';
+  // Editor mode loading state
+  if (documentPath && documentQuery.isPending) {
+    return (
+      <AppShell sidebar={sidebarContent}>
+        <DocumentEditorSkeleton documentPath={documentPath} />
+      </AppShell>
+    );
+  }
+
+  // Editor mode: full window
+  if (documentPath && selectedDocument) {
+    return (
+      <AppShell sidebar={sidebarContent}>
+        <DocumentEditor
+          document={selectedDocument}
+          documentName={documentName}
+          breadcrumbs={breadcrumbs}
+          status={status}
+          isBusy={isBusy}
+          editorKey={editorKey}
+          onBack={handleBackToExplorer}
+          onNavigateToDirectory={handleOpenDirectory}
+          onDocumentNameChange={handleDocumentNameChange}
+          onDocumentNameBlur={handleDocumentNameBlur}
+          onDocumentContentChange={handleDocumentContentChange}
+          onDelete={handleDeleteDocument}
+          onKeyDown={(e) => e.key === 'Enter' && e.currentTarget.blur()}
+        />
+      </AppShell>
+    );
+  }
+
+  // Explorer mode
   const showDirInspector = !selectedDocument && currentDirectory && currentDirectory.path !== '/';
 
   return (
@@ -336,12 +487,7 @@ export function ExplorerShell({ directoryPath, documentPath }: ExplorerShellProp
             </Button>
           </div>
           {!rootDocumentsBlocked && (
-            <Button
-              size="sm"
-              variant="secondary"
-              onClick={() => setNewDocDialogOpen(true)}
-              disabled={isBusy}
-            >
+            <Button size="sm" variant="secondary" onClick={handleCreateDocument} disabled={isBusy}>
               <FilePlusIcon className="h-3.5 w-3.5" />
               New doc
             </Button>
@@ -417,21 +563,9 @@ export function ExplorerShell({ directoryPath, documentPath }: ExplorerShellProp
         )}
       </div>
 
-      {/* Inspector panel */}
-      <InspectorPanel open={inspectorOpen} onClose={closeInspector} title={inspectorTitle}>
-        {selectedDocument ? (
-          <DocumentInspector
-            document={selectedDocument}
-            documentName={documentName}
-            documentContent={documentContent}
-            isLoading={documentQuery.isLoading}
-            isBusy={isBusy}
-            onDocumentNameChange={setDocumentName}
-            onDocumentContentChange={setDocumentContent}
-            onSave={handleSaveDocument}
-            onDelete={handleDeleteDocument}
-          />
-        ) : currentDirectory && currentDirectory.path !== '/' ? (
+      {/* Inspector panel - only for directories now */}
+      <InspectorPanel open={inspectorOpen} onClose={closeInspector} title="Directory controls">
+        {currentDirectory && currentDirectory.path !== '/' ? (
           <DirectoryInspector
             directory={currentDirectory}
             directoryName={directoryName}
@@ -442,202 +576,9 @@ export function ExplorerShell({ directoryPath, documentPath }: ExplorerShellProp
           />
         ) : null}
       </InspectorPanel>
-
-      {/* New document dialog */}
-      <Dialog open={newDocDialogOpen} onOpenChange={setNewDocDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Create document</DialogTitle>
-          </DialogHeader>
-
-          <div className="space-y-4">
-            <div>
-              <label className="mb-1.5 block text-xs font-medium text-muted-foreground">
-                File name
-              </label>
-              <Input
-                value={newDocumentName}
-                onChange={(e) => setNewDocumentName(e.target.value)}
-                placeholder="briefing.md"
-              />
-            </div>
-            <div>
-              <label className="mb-1.5 block text-xs font-medium text-muted-foreground">
-                Content
-              </label>
-              <Textarea
-                className="min-h-40"
-                value={newDocumentContent}
-                onChange={(e) => setNewDocumentContent(e.target.value)}
-              />
-            </div>
-            <div className="flex justify-end gap-2">
-              <Button variant="ghost" onClick={() => setNewDocDialogOpen(false)}>
-                Cancel
-              </Button>
-              <Button onClick={handleCreateDocument} disabled={isBusy}>
-                Create
-              </Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
     </AppShell>
   );
 }
-
-/**
- * ExplorerRow represents a single row in the file list, displaying either a directory or a document.
- */
-const ExplorerRow = ({
-  node,
-  isSelected,
-  onSelect,
-}: {
-  node: ExplorerNode;
-  isSelected: boolean;
-  onSelect: () => void;
-}) => {
-  const details =
-    node.kind === 'directory'
-      ? `${node.child_directories_count}d / ${node.child_documents_count}f`
-      : `${Math.max(1, Math.ceil(('size_bytes' in node ? node.size_bytes : 0) / 1024))} KB`;
-
-  return (
-    <button
-      type="button"
-      className={cn(
-        'flex w-full items-center gap-3 px-4 py-2.5 text-left transition-colors sm:grid sm:grid-cols-[minmax(0,1fr)_100px_100px] sm:gap-3',
-        isSelected ? 'bg-accent/60' : 'hover:bg-muted/60',
-      )}
-      onClick={onSelect}
-    >
-      <div className="flex min-w-0 flex-1 items-center gap-2.5">
-        <NodeGlyph kind={node.kind} />
-        <div className="min-w-0">
-          <span className="block truncate text-sm font-medium text-foreground">{node.name}</span>
-          <span className="block truncate text-xs text-muted-foreground sm:hidden">
-            {node.kind} · {details}
-          </span>
-        </div>
-      </div>
-      <Badge className="hidden sm:inline-flex">{node.kind}</Badge>
-      <span className="hidden text-xs text-muted-foreground sm:block">{details}</span>
-    </button>
-  );
-};
-
-/**
- * DirectoryInspector is the component shown in the inspector panel when a directory is selected.
- */
-const DirectoryInspector = ({
-  directory,
-  directoryName,
-  isBusy,
-  onDirectoryNameChange,
-  onSave,
-  onDelete,
-}: {
-  directory: ExplorerDirectory;
-  directoryName: string;
-  isBusy: boolean;
-  onDirectoryNameChange: (value: string) => void;
-  onSave: () => void;
-  onDelete: () => void;
-}) => {
-  const isRoot = directory.path === '/';
-  return (
-    <div className="space-y-5">
-      <div>
-        <h3 className="font-heading text-lg font-semibold text-foreground">
-          {isRoot ? 'Root archive' : directory.name}
-        </h3>
-        <p className="mt-1 text-xs text-muted-foreground">{directory.path}</p>
-      </div>
-      <div>
-        <label className="mb-1.5 block text-xs font-medium text-muted-foreground">
-          Directory name
-        </label>
-        <Input
-          value={directoryName}
-          onChange={(e) => onDirectoryNameChange(e.target.value)}
-          disabled={isRoot}
-          placeholder="archive-branch"
-        />
-        <p className="mt-2 text-xs text-muted-foreground">Root cannot be renamed or deleted.</p>
-      </div>
-      <div className="flex gap-2">
-        <Button variant="secondary" size="sm" onClick={onSave} disabled={isBusy || isRoot}>
-          Save
-        </Button>
-        <Button variant="destructive" size="sm" onClick={onDelete} disabled={isBusy || isRoot}>
-          Delete
-        </Button>
-      </div>
-    </div>
-  );
-};
-
-/**
- * DocumentInspector is the component shown in the inspector panel when a document is selected.
- */
-const DocumentInspector = ({
-  document,
-  documentName,
-  documentContent,
-  isLoading,
-  isBusy,
-  onDocumentNameChange,
-  onDocumentContentChange,
-  onSave,
-  onDelete,
-}: {
-  document?: ExplorerDocument;
-  documentName: string;
-  documentContent: string;
-  isLoading: boolean;
-  isBusy: boolean;
-  onDocumentNameChange: (value: string) => void;
-  onDocumentContentChange: (value: string) => void;
-  onSave: () => void;
-  onDelete: () => void;
-}) => {
-  if (isLoading) return <EmptyState title="Loading…" description="Opening document." />;
-  if (!document) return <EmptyState title="No document" description="Select a document to edit." />;
-
-  return (
-    <div className="space-y-5">
-      <div>
-        <h3 className="font-heading text-lg font-semibold text-foreground">{document.name}</h3>
-        <p className="mt-1 text-xs text-muted-foreground">{document.path}</p>
-      </div>
-      <div>
-        <label className="mb-1.5 block text-xs font-medium text-muted-foreground">File name</label>
-        <Input
-          value={documentName}
-          onChange={(e) => onDocumentNameChange(e.target.value)}
-          placeholder="briefing"
-        />
-      </div>
-      <div>
-        <label className="mb-1.5 block text-xs font-medium text-muted-foreground">Content</label>
-        <Textarea
-          className="min-h-64 font-mono text-xs"
-          value={documentContent}
-          onChange={(e) => onDocumentContentChange(e.target.value)}
-        />
-      </div>
-      <div className="flex gap-2">
-        <Button variant="secondary" size="sm" onClick={onSave} disabled={isBusy}>
-          Save
-        </Button>
-        <Button variant="destructive" size="sm" onClick={onDelete} disabled={isBusy}>
-          Delete
-        </Button>
-      </div>
-    </div>
-  );
-};
 
 const EmptyState = ({
   title,
@@ -655,53 +596,6 @@ const EmptyState = ({
     <h3 className="text-sm font-semibold text-foreground">{title}</h3>
     <p className="mt-1 max-w-xs text-xs text-muted-foreground">{description}</p>
   </div>
-);
-
-const NodeGlyph = ({ kind }: { kind: ExplorerNode['kind'] }) => {
-  if (kind === 'directory') {
-    return (
-      <span className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
-        <svg viewBox="0 0 24 24" className="h-3.5 w-3.5 fill-none stroke-current" strokeWidth="1.8">
-          <path d="M3 7.75A2.75 2.75 0 0 1 5.75 5h4.39a2 2 0 0 1 1.42.59l1.1 1.1a2 2 0 0 0 1.42.58h4.17A2.75 2.75 0 0 1 21 10.02v6.23A2.75 2.75 0 0 1 18.25 19H5.75A2.75 2.75 0 0 1 3 16.25z" />
-        </svg>
-      </span>
-    );
-  }
-  return (
-    <span className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-accent/40 text-accent-foreground">
-      <svg viewBox="0 0 24 24" className="h-3.5 w-3.5 fill-none stroke-current" strokeWidth="1.8">
-        <path d="M7.75 3h5.19a2 2 0 0 1 1.42.59l3.05 3.05a2 2 0 0 1 .59 1.42v10.19A2.75 2.75 0 0 1 15.25 21h-7.5A2.75 2.75 0 0 1 5 18.25v-12.5A2.75 2.75 0 0 1 7.75 3Z" />
-        <path d="M14 3.5V7a2 2 0 0 0 2 2h3.5" />
-        <path d="M8.5 13h7M8.5 16.5h5" />
-      </svg>
-    </span>
-  );
-};
-
-const FolderPlusIcon = ({ className }: { className?: string }) => (
-  <svg
-    viewBox="0 0 24 24"
-    className={className}
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="1.8"
-  >
-    <path d="M3 7.75A2.75 2.75 0 0 1 5.75 5h4.39a2 2 0 0 1 1.42.59l1.1 1.1a2 2 0 0 0 1.42.58h4.17A2.75 2.75 0 0 1 21 10.02v6.23A2.75 2.75 0 0 1 18.25 19H5.75A2.75 2.75 0 0 1 3 16.25z" />
-    <path d="M12 12v4M10 14h4" />
-  </svg>
-);
-
-const FilePlusIcon = ({ className }: { className?: string }) => (
-  <svg
-    viewBox="0 0 24 24"
-    className={className}
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="1.8"
-  >
-    <path d="M7.75 3h5.19a2 2 0 0 1 1.42.59l3.05 3.05a2 2 0 0 1 .59 1.42v10.19A2.75 2.75 0 0 1 15.25 21h-7.5A2.75 2.75 0 0 1 5 18.25v-12.5A2.75 2.75 0 0 1 7.75 3Z" />
-    <path d="M12 11v6M9 14h6" />
-  </svg>
 );
 
 const EmptyIcon = ({ className }: { className?: string }) => (
