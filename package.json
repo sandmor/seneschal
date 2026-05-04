@@ -19,7 +19,7 @@
     "lint": "bun run lint:files && bun run lint:py && bun run lint:frontend && bun run typecheck:scripts",
     "lint:files": "ls-lint",
     "lint:py": "uv run ruff check backend",
-    "lint:frontend": "bun run --cwd frontend lint && bun run --cwd frontend typecheck",
+    "lint:frontend": "bun run orval && bun run --cwd frontend lint && bun run --cwd frontend typecheck",
     "orval": "bun run ./scripts/orval.ts",
     "smoke": "bun run ./scripts/smoke.ts local",
     "smoke:docker": "bun run ./scripts/smoke.ts docker",
