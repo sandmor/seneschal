@@ -7,7 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
+import { RichTextEditor } from '@/components/ui/rich-text-editor';
 import {
   createDirectory,
   createDocument,
@@ -443,45 +443,46 @@ export function ExplorerShell({ directoryPath, documentPath }: ExplorerShellProp
         ) : null}
       </InspectorPanel>
 
-      {/* New document dialog */}
-      <Dialog open={newDocDialogOpen} onOpenChange={setNewDocDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Create document</DialogTitle>
-          </DialogHeader>
+        {/* New document dialog */}
+        <Dialog open={newDocDialogOpen} onOpenChange={setNewDocDialogOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Create document</DialogTitle>
+            </DialogHeader>
 
-          <div className="space-y-4">
-            <div>
-              <label className="mb-1.5 block text-xs font-medium text-muted-foreground">
-                File name
-              </label>
-              <Input
-                value={newDocumentName}
-                onChange={(e) => setNewDocumentName(e.target.value)}
-                placeholder="briefing.md"
-              />
+            <div className="space-y-4">
+              <div>
+                <label className="mb-1.5 block text-xs font-medium text-muted-foreground">
+                  File name
+                </label>
+                <Input
+                  value={newDocumentName}
+                  onChange={(e) => setNewDocumentName(e.target.value)}
+                  placeholder="briefing.md"
+                />
+              </div>
+              <div>
+                <label className="mb-1.5 block text-xs font-medium text-muted-foreground">
+                  Content
+                </label>
+                <RichTextEditor
+                  value={newDocumentContent}
+                  onChange={setNewDocumentContent}
+                  placeholder="# Mi nuevo documento…"
+                  className="min-h-40"
+                />
+              </div>
+              <div className="flex justify-end gap-2">
+                <Button variant="ghost" onClick={() => setNewDocDialogOpen(false)}>
+                  Cancel
+                </Button>
+                <Button onClick={handleCreateDocument} disabled={isBusy}>
+                  Create
+                </Button>
+              </div>
             </div>
-            <div>
-              <label className="mb-1.5 block text-xs font-medium text-muted-foreground">
-                Content
-              </label>
-              <Textarea
-                className="min-h-40"
-                value={newDocumentContent}
-                onChange={(e) => setNewDocumentContent(e.target.value)}
-              />
-            </div>
-            <div className="flex justify-end gap-2">
-              <Button variant="ghost" onClick={() => setNewDocDialogOpen(false)}>
-                Cancel
-              </Button>
-              <Button onClick={handleCreateDocument} disabled={isBusy}>
-                Create
-              </Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
+          </DialogContent>
+        </Dialog>
     </AppShell>
   );
 }
@@ -501,7 +502,7 @@ const ExplorerRow = ({
   const details =
     node.kind === 'directory'
       ? `${node.child_directories_count}d / ${node.child_documents_count}f`
-      : `${Math.max(1, Math.ceil(('size_bytes' in node ? node.size_bytes : 0) / 1024))} KB`;
+      : `${Math.max(1, Math.ceil(node.size_bytes / 1024))} KB`;
 
   return (
     <button
@@ -621,10 +622,11 @@ const DocumentInspector = ({
       </div>
       <div>
         <label className="mb-1.5 block text-xs font-medium text-muted-foreground">Content</label>
-        <Textarea
-          className="min-h-64 font-mono text-xs"
+        {/* ✅ usa documentContent y onDocumentContentChange (props del DocumentInspector) */}
+        <RichTextEditor
           value={documentContent}
-          onChange={(e) => onDocumentContentChange(e.target.value)}
+          onChange={onDocumentContentChange}
+          className="min-h-64"
         />
       </div>
       <div className="flex gap-2">
