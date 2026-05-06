@@ -1,79 +1,78 @@
-import {
-  createDirectoryApiDirectoriesPost,
-  createDocumentApiDocumentsPost,
-  deleteDirectoryApiDirectoriesDelete,
-  deleteDocumentApiDocumentsDelete,
-  getDirectoryApiDirectoriesGet,
-  getDocumentApiDocumentsGet,
-  updateDirectoryApiDirectoriesPatch,
-  updateDocumentApiDocumentsPatch,
-} from '@/api/endpoints/api';
-import type { DirectoryResponse, DocumentResponse } from '@/api/models';
-import { ApiError } from '@/lib/orval-client';
+// 🔥 MOCK API (temporal mientras backend no está listo)
 
-export type ExplorerDirectory = DirectoryResponse;
-export type ExplorerNode = DirectoryResponse['children'][number];
-export type ExplorerDocument = DocumentResponse;
+export type ExplorerDocument = {
+  path: string;
+  content: string;
+};
+
+export type ExplorerDirectory = {
+  path: string;
+  children: ExplorerNode[];
+};
+
+export type ExplorerNode = {
+  name: string;
+  type: 'file' | 'directory';
+};
 
 export const directoryQueryKey = (path: string) => ['directory', path] as const;
 export const documentQueryKey = (path: string) => ['document', path] as const;
 
-export async function getDirectory(path: string) {
-  const response = await getDirectoryApiDirectoriesGet({ path });
-  return response.data as ExplorerDirectory;
+// 🧪 Fake data
+const mockFiles: ExplorerNode[] = [
+  { name: 'doc1.txt', type: 'file' },
+  { name: 'notes.md', type: 'file' },
+  { name: 'projects', type: 'directory' },
+];
+
+// 📁 Directory
+export async function getDirectory(path: string): Promise<ExplorerDirectory> {
+  return {
+    path,
+    children: mockFiles,
+  };
 }
 
 export async function createDirectory(path: string) {
-  const response = await createDirectoryApiDirectoriesPost({ path });
-  return response.data as ExplorerDirectory;
+  return { path, children: [] };
 }
 
 export async function updateDirectory(path: string, newPath: string) {
-  const response = await updateDirectoryApiDirectoriesPatch({ new_path: newPath }, { path });
-  return response.data as ExplorerDirectory;
+  return { path: newPath, children: [] };
 }
 
 export async function deleteDirectory(path: string, recursive: boolean) {
-  await deleteDirectoryApiDirectoriesDelete({ path, recursive });
+  console.log('delete directory', path, recursive);
 }
 
-export async function getDocument(path: string) {
-  const response = await getDocumentApiDocumentsGet({ path });
-  return response.data as ExplorerDocument;
+// 📄 Document
+export async function getDocument(path: string): Promise<ExplorerDocument> {
+  return {
+    path,
+    content: 'Contenido de ejemplo del documento...',
+  };
 }
 
 export async function createDocument(path: string, content: string) {
-  const response = await createDocumentApiDocumentsPost({ path, content });
-  return response.data as ExplorerDocument;
+  return { path, content };
 }
 
 export async function updateDocument(
   path: string,
   options: { content?: string; newPath?: string },
 ) {
-  const response = await updateDocumentApiDocumentsPatch(
-    {
-      content: options.content ?? null,
-      new_path: options.newPath ?? null,
-    },
-    { path },
-  );
-
-  return response.data as ExplorerDocument;
+  return {
+    path: options.newPath ?? path,
+    content: options.content ?? '',
+  };
 }
 
 export async function deleteDocument(path: string) {
-  await deleteDocumentApiDocumentsDelete({ path });
+  console.log('delete document', path);
 }
 
+// ❌ errores simulados simples
 export function getApiErrorMessage(error: unknown) {
-  if (error instanceof ApiError) {
-    return error.message;
-  }
-
-  if (error instanceof Error) {
-    return error.message;
-  }
-
+  if (error instanceof Error) return error.message;
   return 'An unexpected error occurred.';
 }
