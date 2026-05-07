@@ -391,18 +391,18 @@ export function ExplorerShell({ directoryPath, documentPath }: ExplorerShellProp
               <span>Details</span>
             </div>
             <div className="divide-y divide-border">
-              {currentDirectory.children.map((node) => (
-                <ExplorerRow
-                  key={node.path}
-                  node={node}
-                  isSelected={node.path === documentPath}
-                  onSelect={() =>
-                    node.kind === 'directory'
-                      ? handleOpenDirectory(node.path)
-                      : handleOpenDocument(node.path)
-                  }
-                />
-              ))}
+              {currentDirectory.children.map((node: ExplorerNode) => (
+                  <ExplorerRow
+                    key={node.path}
+                    node={node}
+                    isSelected={node.path === documentPath}
+                    onSelect={() =>
+                      node.kind === 'directory'
+                        ? handleOpenDirectory(node.path)
+                        : handleOpenDocument(node.path)
+                    }
+                  />
+                ))}
             </div>
           </div>
         ) : (
