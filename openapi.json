@@ -8,9 +8,7 @@
   "paths": {
     "/health": {
       "get": {
-        "tags": [
-          "system"
-        ],
+        "tags": ["system"],
         "summary": "Healthcheck",
         "operationId": "healthcheck_health_get",
         "responses": {
@@ -33,9 +31,7 @@
     },
     "/api/directories": {
       "get": {
-        "tags": [
-          "directories"
-        ],
+        "tags": ["directories"],
         "summary": "Get Directory",
         "operationId": "get_directory_api_directories_get",
         "parameters": [
@@ -74,9 +70,7 @@
         }
       },
       "post": {
-        "tags": [
-          "directories"
-        ],
+        "tags": ["directories"],
         "summary": "Create Directory",
         "operationId": "create_directory_api_directories_post",
         "requestBody": {
@@ -113,9 +107,7 @@
         }
       },
       "patch": {
-        "tags": [
-          "directories"
-        ],
+        "tags": ["directories"],
         "summary": "Update Directory",
         "operationId": "update_directory_api_directories_patch",
         "parameters": [
@@ -163,9 +155,7 @@
         }
       },
       "delete": {
-        "tags": [
-          "directories"
-        ],
+        "tags": ["directories"],
         "summary": "Delete Directory",
         "operationId": "delete_directory_api_directories_delete",
         "parameters": [
@@ -208,9 +198,7 @@
     },
     "/api/documents": {
       "get": {
-        "tags": [
-          "documents"
-        ],
+        "tags": ["documents"],
         "summary": "Get Document",
         "operationId": "get_document_api_documents_get",
         "parameters": [
@@ -248,9 +236,7 @@
         }
       },
       "post": {
-        "tags": [
-          "documents"
-        ],
+        "tags": ["documents"],
         "summary": "Create Document",
         "operationId": "create_document_api_documents_post",
         "requestBody": {
@@ -287,9 +273,7 @@
         }
       },
       "patch": {
-        "tags": [
-          "documents"
-        ],
+        "tags": ["documents"],
         "summary": "Update Document",
         "operationId": "update_document_api_documents_patch",
         "parameters": [
@@ -337,9 +321,7 @@
         }
       },
       "delete": {
-        "tags": [
-          "documents"
-        ],
+        "tags": ["documents"],
         "summary": "Delete Document",
         "operationId": "delete_document_api_documents_delete",
         "parameters": [
@@ -381,9 +363,7 @@
           }
         },
         "type": "object",
-        "required": [
-          "path"
-        ],
+        "required": ["path"],
         "title": "CreateDirectoryRequest"
       },
       "CreateDocumentRequest": {
@@ -399,9 +379,7 @@
           }
         },
         "type": "object",
-        "required": [
-          "path"
-        ],
+        "required": ["path"],
         "title": "CreateDocumentRequest"
       },
       "DirectoryNodeResponse": {
@@ -544,12 +522,7 @@
           }
         },
         "type": "object",
-        "required": [
-          "path",
-          "name",
-          "parent_path",
-          "size_bytes"
-        ],
+        "required": ["path", "name", "parent_path", "size_bytes"],
         "title": "DocumentNodeResponse"
       },
       "DocumentResponse": {
@@ -582,13 +555,7 @@
           }
         },
         "type": "object",
-        "required": [
-          "path",
-          "name",
-          "parent_path",
-          "size_bytes",
-          "content"
-        ],
+        "required": ["path", "name", "parent_path", "size_bytes", "content"],
         "title": "DocumentResponse"
       },
       "HTTPValidationError": {
@@ -612,9 +579,7 @@
           }
         },
         "type": "object",
-        "required": [
-          "new_path"
-        ],
+        "required": ["new_path"],
         "title": "UpdateDirectoryRequest"
       },
       "UpdateDocumentRequest": {
@@ -678,11 +643,7 @@
           }
         },
         "type": "object",
-        "required": [
-          "loc",
-          "msg",
-          "type"
-        ],
+        "required": ["loc", "msg", "type"],
         "title": "ValidationError"
       }
     }

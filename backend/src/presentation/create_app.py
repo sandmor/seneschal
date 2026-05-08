@@ -15,13 +15,13 @@ from src.domain.domain_errors import (
     ResourceNotFoundError,
 )
 from src.presentation.api_router import create_api_router
-from src.adapters.database import init_db          
-from src.presentation.role_router import role_router  
+from src.adapters.database import init_db
+from src.presentation.role_router import role_router
 
 
 def create_app() -> FastAPI:
     _load_root_env()
-    init_db()                                         
+    init_db()
     storage = LocalStorageAdapter(_resolve_data_directory())
     service = DocumentManagementService(storage=storage)
     app = FastAPI(
@@ -36,7 +36,7 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
     app.include_router(create_api_router(service))
-    app.include_router(role_router)                    
+    app.include_router(role_router)
 
     @app.exception_handler(InvalidPathError)
     async def handle_invalid_path(_: Request, error: InvalidPathError) -> JSONResponse:

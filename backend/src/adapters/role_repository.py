@@ -1,4 +1,3 @@
-
 from __future__ import annotations
 from sqlalchemy import Column, Integer, String, Boolean, Table, ForeignKey
 from sqlalchemy.orm import relationship, Session
@@ -32,6 +31,7 @@ class UserModel(Base):
 
 
 # --- Funciones CRUD para Roles ---
+
 
 def create_role(session: Session, name: str, description: str = "") -> Role:
     role = RoleModel(name=name, description=description)
@@ -77,6 +77,7 @@ def delete_role(session: Session, role_id: int) -> bool:
 
 # --- Funciones CRUD para Usuarios ---
 
+
 def create_user(session: Session, username: str, email: str) -> User:
     user = UserModel(username=username, email=email)
     session.add(user)
@@ -89,8 +90,9 @@ def get_all_users(session: Session) -> list[User]:
     users = []
     for u in session.query(UserModel).all():
         roles = [Role(id=r.id, name=r.name) for r in u.roles]
-        users.append(User(id=u.id, username=u.username, email=u.email,
-                          is_active=u.is_active, roles=roles))
+        users.append(
+            User(id=u.id, username=u.username, email=u.email, is_active=u.is_active, roles=roles)
+        )
     return users
 
 

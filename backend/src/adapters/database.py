@@ -1,4 +1,3 @@
-
 from __future__ import annotations
 import os
 from sqlalchemy import create_engine
@@ -18,4 +17,5 @@ def get_session() -> Session:
 
 def init_db() -> None:
     from src.adapters import role_repository  # noqa: F401 - registra los modelos
+
     Base.metadata.create_all(engine)

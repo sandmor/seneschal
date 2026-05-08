@@ -1,4 +1,3 @@
-
 from __future__ import annotations
 from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel
@@ -8,18 +7,22 @@ from src.adapters import role_repository as repo
 
 # --- Schemas de entrada/salida ---
 
+
 class RoleIn(BaseModel):
     name: str
     description: str = ""
+
 
 class RoleOut(BaseModel):
     id: int
     name: str
     description: str
 
+
 class UserIn(BaseModel):
     username: str
     email: str
+
 
 class UserOut(BaseModel):
     id: int
@@ -27,6 +30,7 @@ class UserOut(BaseModel):
     email: str
     is_active: bool
     roles: list[RoleOut] = []
+
 
 class AssignRoleIn(BaseModel):
     user_id: int
