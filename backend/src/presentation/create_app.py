@@ -1,14 +1,11 @@
 from __future__ import annotations
-
 import os
 from pathlib import Path
 from urllib.parse import urlsplit, urlunsplit
-
 from dotenv import load_dotenv
 from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-
 from src.adapters.local_storage import LocalStorageAdapter
 from src.application.document_management_service import DocumentManagementService
 from src.domain.domain_errors import (
@@ -18,19 +15,19 @@ from src.domain.domain_errors import (
     ResourceNotFoundError,
 )
 from src.presentation.api_router import create_api_router
+from src.adapters.database import init_db          
+from src.presentation.role_router import role_router  
 
 
 def create_app() -> FastAPI:
     _load_root_env()
-
+    init_db()                                         
     storage = LocalStorageAdapter(_resolve_data_directory())
     service = DocumentManagementService(storage=storage)
-
     app = FastAPI(
         title="Seneschal API",
         summary="Document management API for directories and markdown documents.",
     )
-
     app.add_middleware(
         CORSMiddleware,
         allow_origins=_build_allowed_origins(),
@@ -38,8 +35,8 @@ def create_app() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
-
     app.include_router(create_api_router(service))
+    app.include_router(role_router)                    
 
     @app.exception_handler(InvalidPathError)
     async def handle_invalid_path(_: Request, error: InvalidPathError) -> JSONResponse:
@@ -71,7 +68,6 @@ def _build_allowed_origins() -> list[str]:
         f"http://127.0.0.1:{frontend_port}",
         f"http://localhost:{frontend_port}",
     ]
-
     if public_frontend_url:
         candidates.append(public_frontend_url)
         parsed = urlsplit(public_frontend_url)
@@ -80,11 +76,8 @@ def _build_allowed_origins() -> list[str]:
             candidates.append(
                 urlunsplit((parsed.scheme, f"{alternate_host}:{parsed.port}", parsed.path, "", ""))
             )
-
     extra_origins = os.getenv("EXTRA_ALLOWED_ORIGINS", "")
-
     candidates.extend(origin.strip() for origin in extra_origins.split(",") if origin.strip())
-
     return list(dict.fromkeys(candidates))
 
 
