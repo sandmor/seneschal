@@ -120,6 +120,17 @@ export async function fetchText(url: string) {
   return response.text();
 }
 
+export async function fetchJson<T>(url: string, init?: RequestInit) {
+  const response = await fetch(url, init);
+
+  if (!response.ok) {
+    const payload = await response.text();
+    throw new Error(`Request to ${url} failed with status ${response.status}: ${payload}`);
+  }
+
+  return (await response.json()) as T;
+}
+
 export function assertIncludes(haystack: string, needle: string, label: string) {
   if (!haystack.includes(needle)) {
     throw new Error(`Expected ${label} to include '${needle}'.`);

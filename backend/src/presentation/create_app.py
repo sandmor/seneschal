@@ -2,14 +2,18 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
+from urllib.parse import urlsplit, urlunsplit
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
+from src.adapters.in_memory_token_store import InMemoryTokenStore
 from src.adapters.local_storage import LocalStorageAdapter
+from src.application.auth_service import AuthService
 from src.application.document_management_service import DocumentManagementService
+from src.application.user_service import UserService
 from src.domain.domain_errors import (
     DirectoryNotEmptyError,
     InvalidPathError,
@@ -24,22 +28,28 @@ def create_app() -> FastAPI:
 
     storage = LocalStorageAdapter(_resolve_data_directory())
     service = DocumentManagementService(storage=storage)
+    token_store = InMemoryTokenStore()
+    auth_service = AuthService(
+        admin_username=os.getenv("ADMIN_USERNAME", "admin"),
+        admin_password=os.getenv("ADMIN_PASSWORD", "admin123"),
+        token_store=token_store,
+    )
+    user_service = UserService()
 
     app = FastAPI(
         title="Seneschal API",
-        summary="Document management API for directories and markdown documents.",
+        summary="Document management API for directories, markdown documents, and authentication.",
     )
 
-    frontend_url = os.getenv("PUBLIC_FRONTEND_URL", "http://localhost:3000")
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=[frontend_url],
+        allow_origins=_build_allowed_origins(),
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
     )
 
-    app.include_router(create_api_router(service))
+    app.include_router(create_api_router(service, auth_service, user_service, token_store))
 
     @app.exception_handler(InvalidPathError)
     async def handle_invalid_path(_: Request, error: InvalidPathError) -> JSONResponse:
@@ -62,6 +72,30 @@ def create_app() -> FastAPI:
 
 def _resolve_data_directory() -> Path:
     return Path(os.getenv("DATA_DIRECTORY", "data")).resolve()
+
+
+def _build_allowed_origins() -> list[str]:
+    frontend_port = os.getenv("FRONTEND_PORT", "3000")
+    public_frontend_url = os.getenv("PUBLIC_FRONTEND_URL")
+    candidates = [
+        f"http://127.0.0.1:{frontend_port}",
+        f"http://localhost:{frontend_port}",
+    ]
+
+    if public_frontend_url:
+        candidates.append(public_frontend_url)
+        parsed = urlsplit(public_frontend_url)
+        if parsed.scheme and parsed.port and parsed.hostname in {"127.0.0.1", "localhost"}:
+            alternate_host = "localhost" if parsed.hostname == "127.0.0.1" else "127.0.0.1"
+            candidates.append(
+                urlunsplit((parsed.scheme, f"{alternate_host}:{parsed.port}", parsed.path, "", ""))
+            )
+
+    extra_origins = os.getenv("EXTRA_ALLOWED_ORIGINS", "")
+
+    candidates.extend(origin.strip() for origin in extra_origins.split(",") if origin.strip())
+
+    return list(dict.fromkeys(candidates))
 
 
 def _error_response(status_code: int, detail: str) -> JSONResponse:

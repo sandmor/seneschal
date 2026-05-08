@@ -1,4 +1,14 @@
-FROM oven/bun:1 as builder
+FROM ghcr.io/astral-sh/uv:python3.11-bookworm-slim AS openapi-spec
+WORKDIR /app
+
+COPY pyproject.toml uv.lock ./
+COPY backend/pyproject.toml backend/
+RUN uv sync --frozen --no-dev
+
+COPY backend/ backend/
+RUN PYTHONPATH=/app/backend uv run --package backend python -c "import json; from src.main import app; json.dump(app.openapi(), open('/app/openapi.json', 'w'), indent=2)"
+
+FROM oven/bun:1 AS builder
 WORKDIR /app
 
 COPY package.json bun.lock ./
@@ -6,11 +16,12 @@ COPY frontend/package.json frontend/
 
 RUN bun install
 
+COPY --from=openapi-spec /app/openapi.json /app/openapi.json
 COPY frontend/ frontend/
 WORKDIR /app/frontend
+RUN OPENAPI_URL=/app/openapi.json bun run api:generate
 RUN bun run build
 
-# Production Stage
 FROM oven/bun:1-alpine
 WORKDIR /app
 

@@ -2,11 +2,14 @@
   "name": "frontend",
   "type": "module",
   "scripts": {
-    "dev": "vite",
     "build:client": "vite build --outDir dist/client",
+    "build:client:watch": "vite build --outDir dist/client --watch",
     "build:server": "vite build --outDir dist/server --ssr src/entry-server.tsx",
+    "build:server:watch": "vite build --outDir dist/server --ssr src/entry-server.tsx --watch",
     "build": "bun run build:client && bun run build:server",
+    "dev": "bun run build && bun run start:watch",
     "start": "bun run server.ts",
+    "start:watch": "bun --watch server.ts",
     "api:generate": "orval --config ./orval.config.ts",
     "lint": "eslint . && bun run typecheck",
     "typecheck": "tsc --noEmit -p tsconfig.app.json && tsc --noEmit -p tsconfig.node.json"

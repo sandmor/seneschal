@@ -4,6 +4,7 @@ from typing import Annotated, Literal
 
 from pydantic import BaseModel, Field, model_validator
 
+from src.domain.auth_entities import AdminProfile, User
 from src.domain.file_system_entities import (
     DirectoryDetail,
     DirectoryEntry,
@@ -63,6 +64,41 @@ class UpdateDocumentRequest(BaseModel):
             raise ValueError("At least one document update is required.")
 
         return self
+
+
+class LoginRequest(BaseModel):
+    username: str
+    password: str
+
+
+class LoginResponse(BaseModel):
+    token: str
+
+
+class AdminProfileResponse(BaseModel):
+    id: int
+    name: str
+    role: str
+    roles: list[str]
+
+    @classmethod
+    def from_domain(cls, profile: AdminProfile) -> "AdminProfileResponse":
+        return cls(
+            id=profile.id,
+            name=profile.name,
+            role=profile.role,
+            roles=profile.roles,
+        )
+
+
+class UserResponse(BaseModel):
+    id: int
+    name: str
+    roles: list[str]
+
+    @classmethod
+    def from_domain(cls, user: User) -> "UserResponse":
+        return cls(id=user.id, name=user.name, roles=user.roles)
 
 
 def serialize_directory_entry(entry: DirectoryEntry) -> DirectoryNodeResponse:

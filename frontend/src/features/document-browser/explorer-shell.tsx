@@ -21,12 +21,15 @@ import {
   deleteDocument,
   directoryQueryKey,
   documentQueryKey,
-  getApiErrorMessage,
+  ExplorerDirectory,
+  ExplorerDocument,
+  ExplorerNode,
   getDirectory,
   getDocument,
   updateDirectory,
   updateDocument,
 } from '@/features/document-browser/document-browser-api';
+import { getApiErrorMessage } from '@/lib/api-errors';
 import {
   ensureMarkdownExtension,
   getBreadcrumbs,

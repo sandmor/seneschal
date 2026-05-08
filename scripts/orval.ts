@@ -1,42 +1,36 @@
-import { baseEnv, host, rootDir, runCommand, spawnManagedProcess, waitForUrl } from './runtime.js';
+import { baseEnv, rootDir, runCommand } from './runtime.js';
+import * as path from 'node:path';
+import * as fs from 'node:fs';
 
-const backendPort = baseEnv.BACKEND_PORT ?? '8000';
-const openApiUrl = `http://${host}:${backendPort}/openapi.json`;
-
-const backend = spawnManagedProcess(
-  'orval-backend',
-  'uv',
-  [
-    'run',
-    '--package',
-    'backend',
-    'uvicorn',
-    '--app-dir',
-    'backend',
-    'src.main:app',
-    '--host',
-    host,
-    '--port',
-    backendPort,
-  ],
-  {
-    cwd: rootDir,
-    env: baseEnv,
-  },
-);
+const openApiFile = path.resolve(rootDir, 'openapi.json');
 
 try {
-  await waitForUrl(openApiUrl);
+  await runCommand(
+    'extract-spec',
+    'uv',
+    [
+      'run',
+      '--package',
+      'backend',
+      'python',
+      '-c',
+      `import sys; sys.path.insert(0, './backend'); import json; from src.main import app; json.dump(app.openapi(), open('${openApiFile}', 'w'), indent=2)`,
+    ],
+    {
+      cwd: rootDir,
+      env: baseEnv,
+    },
+  );
 
   await runCommand('orval', 'bun', ['run', '--cwd', 'frontend', 'api:generate'], {
     cwd: rootDir,
     env: {
       ...baseEnv,
-      OPENAPI_URL: openApiUrl,
+      OPENAPI_URL: openApiFile,
     },
   });
 } finally {
-  if (backend.child.exitCode === null) {
-    backend.child.kill();
+  if (fs.existsSync(openApiFile)) {
+    fs.rmSync(openApiFile);
   }
 }

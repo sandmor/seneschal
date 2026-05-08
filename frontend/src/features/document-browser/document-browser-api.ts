@@ -9,7 +9,6 @@ import {
   updateDocumentApiDocumentsPatch,
 } from '@/api/endpoints/api';
 import type { DirectoryResponse, DocumentResponse } from '@/api/models';
-import { ApiError } from '@/lib/orval-client';
 
 export type ExplorerDirectory = DirectoryResponse;
 export type ExplorerNode = DirectoryResponse['children'][number];
@@ -64,16 +63,4 @@ export async function updateDocument(
 
 export async function deleteDocument(path: string) {
   await deleteDocumentApiDocumentsDelete({ path });
-}
-
-export function getApiErrorMessage(error: unknown) {
-  if (error instanceof ApiError) {
-    return error.message;
-  }
-
-  if (error instanceof Error) {
-    return error.message;
-  }
-
-  return 'An unexpected error occurred.';
 }
