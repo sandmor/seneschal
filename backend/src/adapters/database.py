@@ -1,4 +1,3 @@
-
 from __future__ import annotations
 import os
 from pathlib import Path
@@ -12,7 +11,7 @@ def _resolve_db_path() -> Path | None:
     """Extrae la ruta del archivo si es SQLite local."""
     if DB_URL.startswith("sqlite:///"):
         raw = DB_URL.removeprefix("sqlite:///")
-        if not raw.startswith(":"):  
+        if not raw.startswith(":"):
             return Path(raw).resolve()
     return None
 
@@ -34,4 +33,5 @@ def init_db() -> None:
         db_path.parent.mkdir(parents=True, exist_ok=True)  # crea data/ si no existe
 
     from src.adapters import role_repository  # noqa: F401 - registra los modelos
+
     Base.metadata.create_all(engine)
