@@ -18,12 +18,12 @@ import {
   ExplorerDirectory,
   ExplorerDocument,
   ExplorerNode,
-  getApiErrorMessage,
   getDirectory,
   getDocument,
   updateDirectory,
   updateDocument,
 } from '@/features/document-browser/document-browser-api';
+import { getApiErrorMessage } from '@/lib/api-errors';
 import {
   ensureMarkdownExtension,
   getBreadcrumbs,

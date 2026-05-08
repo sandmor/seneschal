@@ -1,26 +1,101 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Query, Response, status
+from typing import Annotated
 
+from fastapi import APIRouter, HTTPException, Header, Query, Response, status
+
+from src.application.auth_service import AuthService
 from src.application.document_management_service import DocumentManagementService
+from src.application.token_store import TokenStore
+from src.application.user_service import UserService
+from src.domain.domain_errors import InvalidCredentialsError
 from src.presentation.api_schemas import (
+    AdminProfileResponse,
     CreateDirectoryRequest,
     CreateDocumentRequest,
     DirectoryResponse,
     DocumentResponse,
+    LoginRequest,
+    LoginResponse,
     UpdateDirectoryRequest,
     UpdateDocumentRequest,
+    UserResponse,
     serialize_directory,
     serialize_document,
 )
 
 
-def create_api_router(service: DocumentManagementService) -> APIRouter:
+def create_api_router(
+    service: DocumentManagementService,
+    auth_service: AuthService,
+    user_service: UserService,
+    token_store: TokenStore,
+) -> APIRouter:
     router = APIRouter()
+
+    def require_bearer_token(authorization: str | None) -> str:
+        if not authorization:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Missing authorization header.",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+
+        scheme, _, token = authorization.partition(" ")
+        if scheme.lower() != "bearer" or not token:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid authorization header.",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+
+        if not token_store.contains(token):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid token.",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+
+        return token
 
     @router.get("/health", tags=["system"])
     async def healthcheck() -> dict[str, str]:
         return {"status": "ok"}
+
+    @router.post("/api/auth/login", response_model=LoginResponse, tags=["auth"])
+    async def login(request: LoginRequest) -> LoginResponse:
+        try:
+            token = auth_service.login(request.username, request.password)
+        except InvalidCredentialsError as error:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail=str(error),
+                headers={"WWW-Authenticate": "Bearer"},
+            ) from error
+
+        return LoginResponse(token=token)
+
+    @router.post("/api/auth/logout", tags=["auth"])
+    async def logout(
+        authorization: Annotated[str | None, Header()] = None,
+    ) -> dict[str, str]:
+        token = require_bearer_token(authorization)
+        auth_service.logout(token)
+        return {"status": "ok"}
+
+    @router.get("/api/auth/me", response_model=AdminProfileResponse, tags=["auth"])
+    async def get_profile(
+        authorization: Annotated[str | None, Header()] = None,
+    ) -> AdminProfileResponse:
+        require_bearer_token(authorization)
+        return AdminProfileResponse.from_domain(auth_service.get_admin_profile())
+
+    @router.get("/api/users", response_model=list[UserResponse], tags=["users"])
+    async def get_users(
+        authorization: Annotated[str | None, Header()] = None,
+    ) -> list[UserResponse]:
+        require_bearer_token(authorization)
+        return [UserResponse.from_domain(user) for user in user_service.list_users()]
 
     @router.get("/api/directories", response_model=DirectoryResponse, tags=["directories"])
     async def get_directory(path: str = Query(default="/")) -> DirectoryResponse:

@@ -4,6 +4,7 @@ import {
   baseEnv,
   cleanupProcesses,
   dockerCompose,
+  fetchJson,
   fetchText,
   host,
   internalApiUrl,
@@ -16,8 +17,13 @@ import {
 } from './runtime.js';
 
 type SmokeMode = 'local' | 'docker';
+type LoginResponse = { token: string };
+type AdminProfile = { name: string; role: string };
+type User = { id: number; name: string; roles: string[] };
 
 const mode = parseMode(process.argv[2]);
+const adminUsername = baseEnv.ADMIN_USERNAME ?? 'admin';
+const adminPassword = baseEnv.ADMIN_PASSWORD ?? 'admin123';
 
 if (mode === 'local') {
   await runLocalSmoke();
@@ -87,9 +93,12 @@ async function runLocalSmoke() {
         `http://${host}:${backendPort}/api/directories?path=/`,
       );
       const frontendHtml = await fetchText(`http://${host}:${frontendPort}/`);
+      const authHtml = await fetchText(`http://${host}:${frontendPort}/auth`);
 
       assertIncludes(backendRootDirectory, '"kind":"directory"', 'backend root directory payload');
       assertIncludes(frontendHtml, '<title>Seneschal</title>', 'frontend HTML');
+      assertIncludes(authHtml, 'Authentication', 'auth route HTML');
+      await exerciseAuthFlow(`http://${host}:${backendPort}`);
     } finally {
       cleanupProcesses([frontend]);
     }
@@ -117,9 +126,12 @@ async function runDockerSmoke() {
       `http://${host}:${backendPort}/api/directories?path=/`,
     );
     const frontendHtml = await fetchText(`http://${host}:${frontendPort}/`);
+    const authHtml = await fetchText(`http://${host}:${frontendPort}/auth`);
 
     assertIncludes(backendRootDirectory, '"kind":"directory"', 'backend root directory payload');
     assertIncludes(frontendHtml, '<title>Seneschal</title>', 'frontend HTML');
+    assertIncludes(authHtml, 'Authentication', 'auth route HTML');
+    await exerciseAuthFlow(`http://${host}:${backendPort}`);
   } finally {
     await dockerCompose(['down', '--volumes', '--remove-orphans']);
   }
@@ -135,4 +147,52 @@ function parseMode(rawMode: string | undefined): SmokeMode {
   }
 
   throw new Error(`Unsupported smoke mode '${rawMode}'. Expected local or docker.`);
+}
+
+async function exerciseAuthFlow(apiBaseUrl: string) {
+  const login = await fetchJson<LoginResponse>(`${apiBaseUrl}/api/auth/login`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      username: adminUsername,
+      password: adminPassword,
+    }),
+  });
+
+  const authorizationHeaders = {
+    Authorization: `Bearer ${login.token}`,
+  };
+
+  const profile = await fetchJson<AdminProfile>(`${apiBaseUrl}/api/auth/me`, {
+    headers: authorizationHeaders,
+  });
+  const users = await fetchJson<User[]>(`${apiBaseUrl}/api/users`, {
+    headers: authorizationHeaders,
+  });
+  const logout = await fetchJson<{ status: string }>(`${apiBaseUrl}/api/auth/logout`, {
+    method: 'POST',
+    headers: authorizationHeaders,
+  });
+
+  if (profile.name !== adminUsername) {
+    throw new Error(
+      `Expected authenticated profile name '${adminUsername}', received '${profile.name}'.`,
+    );
+  }
+
+  if (profile.role !== 'superadmin') {
+    throw new Error(
+      `Expected authenticated profile role 'superadmin', received '${profile.role}'.`,
+    );
+  }
+
+  if (users.length === 0) {
+    throw new Error('Expected at least one placeholder user from /api/users.');
+  }
+
+  if (logout.status !== 'ok') {
+    throw new Error(`Expected logout status 'ok', received '${logout.status}'.`);
+  }
 }

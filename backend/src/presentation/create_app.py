@@ -9,8 +9,11 @@ from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
+from src.adapters.in_memory_token_store import InMemoryTokenStore
 from src.adapters.local_storage import LocalStorageAdapter
+from src.application.auth_service import AuthService
 from src.application.document_management_service import DocumentManagementService
+from src.application.user_service import UserService
 from src.domain.domain_errors import (
     DirectoryNotEmptyError,
     InvalidPathError,
@@ -25,10 +28,17 @@ def create_app() -> FastAPI:
 
     storage = LocalStorageAdapter(_resolve_data_directory())
     service = DocumentManagementService(storage=storage)
+    token_store = InMemoryTokenStore()
+    auth_service = AuthService(
+        admin_username=os.getenv("ADMIN_USERNAME", "admin"),
+        admin_password=os.getenv("ADMIN_PASSWORD", "admin123"),
+        token_store=token_store,
+    )
+    user_service = UserService()
 
     app = FastAPI(
         title="Seneschal API",
-        summary="Document management API for directories and markdown documents.",
+        summary="Document management API for directories, markdown documents, and authentication.",
     )
 
     app.add_middleware(
@@ -39,7 +49,7 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
 
-    app.include_router(create_api_router(service))
+    app.include_router(create_api_router(service, auth_service, user_service, token_store))
 
     @app.exception_handler(InvalidPathError)
     async def handle_invalid_path(_: Request, error: InvalidPathError) -> JSONResponse:
