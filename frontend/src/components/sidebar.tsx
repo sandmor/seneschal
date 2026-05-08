@@ -2,16 +2,16 @@ import { useTheme } from '@/providers/theme-provider';
 import { cn } from '@/lib/utils';
 
 type SidebarProps = {
-  breadcrumbs: { label: string; path: string }[];
-  currentPath: string;
+  breadcrumbs?: { label: string; path: string }[];
+  currentPath?: string;
   directoryCount: number;
   documentCount: number;
-  onNavigate: (path: string) => void;
+  onNavigate?: (path: string) => void;
 };
 
 export function Sidebar({
-  breadcrumbs,
-  currentPath,
+  breadcrumbs = [],
+  currentPath = '',
   directoryCount,
   documentCount,
   onNavigate,
@@ -47,7 +47,7 @@ export function Sidebar({
                       : 'text-muted-foreground hover:bg-secondary hover:text-foreground',
                   )}
                   style={{ paddingLeft: `${index * 12 + 10}px` }}
-                  onClick={() => onNavigate(crumb.path)}
+                  onClick={() => onNavigate?.(crumb.path)}
                 >
                   {isActive && (
                     <span className="mr-0.5 inline-block h-4 w-0.5 rounded-full bg-primary" />

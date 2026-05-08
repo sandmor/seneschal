@@ -23,6 +23,13 @@ Default ports:
 Default storage:
 
 - Backend data directory: `./data` locally, `/app/data` in Docker
+- Auth route: `http://127.0.0.1:3000/auth`
+
+Default auth credentials:
+
+- Username: `admin`
+- Password: `admin123`
+- Override with `ADMIN_USERNAME` and `ADMIN_PASSWORD` in `.env`
 
 ## Setup Without Docker
 
@@ -63,6 +70,7 @@ bun run dev:frontend
 Open:
 
 - Frontend: `http://127.0.0.1:3000`
+- Auth page: `http://127.0.0.1:3000/auth`
 - Backend OpenAPI: `http://127.0.0.1:8000/openapi.json`
 
 If you just want the verified local smoke path instead of starting both processes manually:
