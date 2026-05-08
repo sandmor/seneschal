@@ -4,9 +4,11 @@ import {
   dataDirectory,
   frontendPort,
   host,
+  internalApiUrl,
   publicApiUrl,
   publicFrontendUrl,
   rootDir,
+  runCommand,
   spawnManagedProcess,
   waitForLinkedProcesses,
   waitForSingleProcess,
@@ -20,6 +22,8 @@ const mode = parseMode(process.argv[2]);
 await run(mode);
 
 async function run(selectedMode: Mode) {
+  await buildFrontendOnce();
+
   if (selectedMode === 'backend') {
     const backend = spawnBackend();
     await waitForSingleProcess(backend);
@@ -27,15 +31,14 @@ async function run(selectedMode: Mode) {
   }
 
   if (selectedMode === 'frontend') {
-    const frontend = spawnFrontend();
-    await waitForSingleProcess(frontend);
+    await waitForLinkedProcesses(spawnFrontendProcesses());
     return;
   }
 
   const backend = spawnBackend();
-  const frontend = spawnFrontend();
+  const frontendProcesses = spawnFrontendProcesses();
 
-  await waitForLinkedProcesses([backend, frontend]);
+  await waitForLinkedProcesses([backend, ...frontendProcesses]);
 }
 
 function spawnBackend() {
@@ -67,16 +70,42 @@ function spawnBackend() {
   );
 }
 
-function spawnFrontend() {
-  return spawnManagedProcess('frontend', 'bun', ['run', 'dev'], {
+async function buildFrontendOnce() {
+  await runCommand('frontend-build', 'bun', ['run', 'build'], {
     cwd: path.join(rootDir, 'frontend'),
     env: {
       ...baseEnv,
-      HOST: host,
       FRONTEND_PORT: frontendPort,
       VITE_PUBLIC_API_URL: publicApiUrl,
+      INTERNAL_API_URL: internalApiUrl,
     },
   });
+}
+
+function spawnFrontendProcesses() {
+  const frontendCwd = path.join(rootDir, 'frontend');
+  const frontendEnv = {
+    ...baseEnv,
+    FRONTEND_PORT: frontendPort,
+    PORT: frontendPort,
+    VITE_PUBLIC_API_URL: publicApiUrl,
+    INTERNAL_API_URL: internalApiUrl,
+  };
+
+  return [
+    spawnManagedProcess('frontend-client-build', 'bun', ['run', 'build:client:watch'], {
+      cwd: frontendCwd,
+      env: frontendEnv,
+    }),
+    spawnManagedProcess('frontend-server-build', 'bun', ['run', 'build:server:watch'], {
+      cwd: frontendCwd,
+      env: frontendEnv,
+    }),
+    spawnManagedProcess('frontend', 'bun', ['run', 'start:watch'], {
+      cwd: frontendCwd,
+      env: frontendEnv,
+    }),
+  ];
 }
 
 function parseMode(rawMode: string | undefined): Mode {

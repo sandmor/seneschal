@@ -50,7 +50,8 @@ bun run dev
 That starts:
 
 - FastAPI with auto-reload on `http://127.0.0.1:8000`
-- Vite frontend dev server on `http://127.0.0.1:3000`
+- Express frontend server on `http://127.0.0.1:3000`
+- Vite build watchers for the client and SSR bundles
 
 If you only want one side:
 

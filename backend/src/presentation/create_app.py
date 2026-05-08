@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
+from urllib.parse import urlsplit, urlunsplit
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, Request, status
@@ -30,10 +31,9 @@ def create_app() -> FastAPI:
         summary="Document management API for directories and markdown documents.",
     )
 
-    frontend_url = os.getenv("PUBLIC_FRONTEND_URL", "http://localhost:3000")
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=[frontend_url],
+        allow_origins=_build_allowed_origins(),
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
@@ -62,6 +62,30 @@ def create_app() -> FastAPI:
 
 def _resolve_data_directory() -> Path:
     return Path(os.getenv("DATA_DIRECTORY", "data")).resolve()
+
+
+def _build_allowed_origins() -> list[str]:
+    frontend_port = os.getenv("FRONTEND_PORT", "3000")
+    public_frontend_url = os.getenv("PUBLIC_FRONTEND_URL")
+    candidates = [
+        f"http://127.0.0.1:{frontend_port}",
+        f"http://localhost:{frontend_port}",
+    ]
+
+    if public_frontend_url:
+        candidates.append(public_frontend_url)
+        parsed = urlsplit(public_frontend_url)
+        if parsed.scheme and parsed.port and parsed.hostname in {"127.0.0.1", "localhost"}:
+            alternate_host = "localhost" if parsed.hostname == "127.0.0.1" else "127.0.0.1"
+            candidates.append(
+                urlunsplit((parsed.scheme, f"{alternate_host}:{parsed.port}", parsed.path, "", ""))
+            )
+
+    extra_origins = os.getenv("EXTRA_ALLOWED_ORIGINS", "")
+
+    candidates.extend(origin.strip() for origin in extra_origins.split(",") if origin.strip())
+
+    return list(dict.fromkeys(candidates))
 
 
 def _error_response(status_code: int, detail: str) -> JSONResponse:
