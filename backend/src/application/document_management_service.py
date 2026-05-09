@@ -92,3 +92,21 @@ class DocumentManagementService:
         if not query or not query.strip():
             raise InvalidPathError("Search query cannot be empty.")
         return self.storage.search_documents(query.strip())
+
+    def copy_document(self, raw_path: str, raw_destination_path: str) -> DocumentDetail:
+        source_path = AbsolutePath.parse(raw_path).ensure_document()
+        destination_path = AbsolutePath.parse(raw_destination_path).ensure_document()
+        if source_path == destination_path:
+            raise InvalidPathError("Destination path must be different from source path.")
+        return self.storage.copy_document(source_path, destination_path)
+
+    def copy_directory(self, raw_path: str, raw_destination_path: str) -> DirectoryDetail:
+        source_path = AbsolutePath.parse(raw_path).ensure_directory()
+        destination_path = AbsolutePath.parse(raw_destination_path).ensure_directory()
+        if source_path.is_root:
+            raise InvalidPathError("The root directory '/' cannot be copied.")
+        if source_path == destination_path:
+            raise InvalidPathError("Destination path must be different from source path.")
+        if source_path.is_ancestor_of(destination_path):
+            raise InvalidPathError("A directory cannot be copied into one of its own descendants.")
+        return self.storage.copy_directory(source_path, destination_path)

@@ -106,6 +106,36 @@ class LocalStorageAdapter:
         source_fs_path.rename(destination_fs_path)
         return self.read_document(destination_path)
 
+    def copy_document(
+        self, source_path: AbsolutePath, destination_path: AbsolutePath
+    ) -> DocumentDetail:
+        source_fs_path = self._require_existing_document(source_path)
+        destination_fs_path = self._fs_path_for(destination_path)
+
+        if destination_fs_path.exists():
+            raise ResourceAlreadyExistsError(
+                f"Destination document '{destination_path.value}' already exists."
+            )
+
+        self._require_existing_directory(destination_path.parent)
+        shutil.copy2(source_fs_path, destination_fs_path)
+        return self.read_document(destination_path)
+
+    def copy_directory(
+        self, source_path: AbsolutePath, destination_path: AbsolutePath
+    ) -> DirectoryDetail:
+        source_fs_path = self._require_existing_directory(source_path)
+        destination_fs_path = self._fs_path_for(destination_path)
+
+        if destination_fs_path.exists():
+            raise ResourceAlreadyExistsError(
+                f"Destination directory '{destination_path.value}' already exists."
+            )
+
+        self._require_existing_directory(destination_path.parent)
+        shutil.copytree(source_fs_path, destination_fs_path)
+        return self.read_directory(destination_path)
+
     def delete_directory(self, path: AbsolutePath, recursive: bool) -> None:
         fs_path = self._require_existing_directory(path)
 
