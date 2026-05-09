@@ -6,7 +6,7 @@ COPY backend/pyproject.toml backend/
 RUN uv sync --frozen --no-dev
 
 COPY backend/ backend/
-RUN uv run --package backend python -c "import json; from src.main import app; json.dump(app.openapi(), open('/app/openapi.json', 'w'), indent=2)"
+RUN PYTHONPATH=/app/backend uv run --package backend python -c "import json; from src.main import app; json.dump(app.openapi(), open('/app/openapi.json', 'w'), indent=2)"
 
 FROM oven/bun:1 as builder
 WORKDIR /app
