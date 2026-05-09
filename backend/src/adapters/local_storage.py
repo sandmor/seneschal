@@ -124,6 +124,16 @@ class LocalStorageAdapter:
         fs_path = self._require_existing_document(path)
         fs_path.unlink()
 
+    def search_documents(self, query: str) -> list[DocumentDetail]:
+        results = []
+        query_lower = query.casefold()
+        for fs_path in self._base_directory.rglob("*.md"):
+            if query_lower in fs_path.name.casefold():
+                segments = fs_path.relative_to(self._base_directory).parts
+                path = AbsolutePath(segments)
+                results.append(self.read_document(path))
+        return sorted(results, key=lambda d: d.document.path.value)
+
     def _fs_path_for(self, path: AbsolutePath) -> Path:
         return self._base_directory.joinpath(*path.segments)
 

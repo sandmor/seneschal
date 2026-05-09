@@ -87,3 +87,8 @@ class DocumentManagementService:
     def delete_document(self, raw_path: str) -> None:
         document_path = AbsolutePath.parse(raw_path).ensure_document()
         self.storage.delete_document(document_path)
+
+    def search_documents(self, query: str) -> list[DocumentDetail]:
+        if not query or not query.strip():
+            raise InvalidPathError("Search query cannot be empty.")
+        return self.storage.search_documents(query.strip())

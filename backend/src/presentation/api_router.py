@@ -156,4 +156,8 @@ def create_api_router(
         service.delete_document(path)
         return Response(status_code=status.HTTP_204_NO_CONTENT)
 
+    @router.get("/api/search", response_model=list[DocumentResponse], tags=["documents"])
+    async def search_documents(q: str = Query(..., min_length=1)) -> list[DocumentResponse]:
+        return [serialize_document(doc) for doc in service.search_documents(q)]
+
     return router
