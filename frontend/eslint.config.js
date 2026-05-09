@@ -50,10 +50,10 @@ export default tseslint.config(
           format: ['camelCase', 'PascalCase'],
         },
 
-        // 6. Non-exported functions — camelCase only
+        // Non-exported functions — camelCase or PascalCase (allowing internal React components)
         {
           selector: 'function',
-          format: ['camelCase'],
+          format: ['camelCase', 'PascalCase'],
         },
 
         // Parameters — camelCase, allow leading underscore for unused

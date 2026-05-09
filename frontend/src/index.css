@@ -3,6 +3,7 @@
 @import 'shadcn/tailwind.css';
 @import '@fontsource-variable/dm-sans';
 @import '@fontsource-variable/playfair-display';
+@import './features/editor/editor-styles.css';
 
 @custom-variant dark (&:is(.dark *));
 
