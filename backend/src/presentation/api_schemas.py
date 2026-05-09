@@ -1,3 +1,4 @@
+
 from __future__ import annotations
 
 from typing import Annotated, Literal
@@ -12,6 +13,8 @@ from src.domain.file_system_entities import (
     DocumentEntry,
 )
 
+from datetime import datetime
+
 
 class DirectoryNodeResponse(BaseModel):
     kind: Literal["directory"] = "directory"
@@ -20,6 +23,8 @@ class DirectoryNodeResponse(BaseModel):
     parent_path: str | None
     child_directories_count: int
     child_documents_count: int
+    created_at: datetime
+    updated_at: datetime
 
 
 class DocumentNodeResponse(BaseModel):
@@ -28,6 +33,8 @@ class DocumentNodeResponse(BaseModel):
     name: str
     parent_path: str
     size_bytes: int
+    created_at: datetime
+    updated_at: datetime
 
 
 NodeResponse = Annotated[DirectoryNodeResponse | DocumentNodeResponse, Field(discriminator="kind")]
@@ -108,7 +115,10 @@ def serialize_directory_entry(entry: DirectoryEntry) -> DirectoryNodeResponse:
         parent_path=None if entry.path.is_root else entry.path.parent.value,
         child_directories_count=entry.child_directories_count,
         child_documents_count=entry.child_documents_count,
+        created_at=entry.created_at,
+        updated_at=entry.updated_at,
     )
+
 
 
 def serialize_document_entry(entry: DocumentEntry) -> DocumentNodeResponse:
@@ -117,6 +127,8 @@ def serialize_document_entry(entry: DocumentEntry) -> DocumentNodeResponse:
         name=entry.path.name,
         parent_path=entry.path.parent.value,
         size_bytes=entry.size_bytes,
+        created_at=entry.created_at,
+        updated_at=entry.updated_at,
     )
 
 

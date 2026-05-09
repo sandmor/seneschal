@@ -3,6 +3,8 @@ from __future__ import annotations
 import shutil
 from pathlib import Path
 
+from datetime import datetime, timezone
+
 from src.domain.domain_errors import (
     DirectoryNotEmptyError,
     ResourceAlreadyExistsError,
@@ -151,14 +153,27 @@ class LocalStorageAdapter:
             else:
                 child_documents_count += 1
 
+        stat = directory_path.stat()
+
         return DirectoryEntry(
             path=path,
             child_directories_count=child_directories_count,
             child_documents_count=child_documents_count,
+            created_at=datetime.fromtimestamp(stat.st_birthtime, tz=timezone.utc),
+            updated_at=datetime.fromtimestamp(stat.st_mtime, tz=timezone.utc),
         )
 
-    def _build_document_entry(self, path: AbsolutePath, document_path: Path) -> DocumentEntry:
-        return DocumentEntry(path=path, size_bytes=document_path.stat().st_size)
+    def _build_document_entry(
+            self, path: AbsolutePath, document_path: Path
+        ) -> DocumentEntry:
+            stat = document_path.stat()
+
+            return DocumentEntry(
+                path=path,
+                size_bytes=stat.st_size,
+                created_at=datetime.fromtimestamp(stat.st_birthtime, tz=timezone.utc),
+                updated_at=datetime.fromtimestamp(stat.st_mtime, tz=timezone.utc),
+            )
 
     def _iter_supported_children(self, path: AbsolutePath, directory_path: Path) -> list[Path]:
         children: list[Path] = []

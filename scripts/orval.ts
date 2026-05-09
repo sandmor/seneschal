@@ -14,7 +14,7 @@ try {
       'backend',
       'python',
       '-c',
-      `import sys; sys.path.insert(0, './backend'); import json; from src.main import app; json.dump(app.openapi(), open('${openApiFile}', 'w'), indent=2)`,
+      `import sys; sys.path.insert(0, './backend'); import json; from src.main import app; json.dump(app.openapi(), open('${openApiFile.replace(/\\/g, '/')}', 'w'), indent=2)`,
     ],
     {
       cwd: rootDir,
