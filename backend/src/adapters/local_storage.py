@@ -163,17 +163,15 @@ class LocalStorageAdapter:
             updated_at=datetime.fromtimestamp(stat.st_mtime, tz=timezone.utc),
         )
 
-    def _build_document_entry(
-            self, path: AbsolutePath, document_path: Path
-        ) -> DocumentEntry:
-            stat = document_path.stat()
+    def _build_document_entry(self, path: AbsolutePath, document_path: Path) -> DocumentEntry:
+        stat = document_path.stat()
 
-            return DocumentEntry(
-                path=path,
-                size_bytes=stat.st_size,
-                created_at=datetime.fromtimestamp(stat.st_birthtime, tz=timezone.utc),
-                updated_at=datetime.fromtimestamp(stat.st_mtime, tz=timezone.utc),
-            )
+        return DocumentEntry(
+            path=path,
+            size_bytes=stat.st_size,
+            created_at=datetime.fromtimestamp(stat.st_birthtime, tz=timezone.utc),
+            updated_at=datetime.fromtimestamp(stat.st_mtime, tz=timezone.utc),
+        )
 
     def _iter_supported_children(self, path: AbsolutePath, directory_path: Path) -> list[Path]:
         children: list[Path] = []

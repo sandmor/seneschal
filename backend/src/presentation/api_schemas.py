@@ -1,4 +1,3 @@
-
 from __future__ import annotations
 
 from typing import Annotated, Literal
@@ -118,7 +117,6 @@ def serialize_directory_entry(entry: DirectoryEntry) -> DirectoryNodeResponse:
         created_at=entry.created_at,
         updated_at=entry.updated_at,
     )
-
 
 
 def serialize_document_entry(entry: DocumentEntry) -> DocumentNodeResponse:
