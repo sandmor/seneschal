@@ -159,7 +159,7 @@ class LocalStorageAdapter:
             path=path,
             child_directories_count=child_directories_count,
             child_documents_count=child_documents_count,
-            created_at=datetime.fromtimestamp(stat.st_birthtime, tz=timezone.utc),
+            created_at=datetime.fromtimestamp(stat.st_ctime, tz=timezone.utc),
             updated_at=datetime.fromtimestamp(stat.st_mtime, tz=timezone.utc),
         )
 
@@ -169,7 +169,7 @@ class LocalStorageAdapter:
         return DocumentEntry(
             path=path,
             size_bytes=stat.st_size,
-            created_at=datetime.fromtimestamp(stat.st_birthtime, tz=timezone.utc),
+            created_at=datetime.fromtimestamp(stat.st_ctime, tz=timezone.utc),
             updated_at=datetime.fromtimestamp(stat.st_mtime, tz=timezone.utc),
         )
 
