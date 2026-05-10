@@ -70,14 +70,14 @@ def delete_role(role_id: int):
             raise HTTPException(status_code=404, detail="Rol no encontrado")
 
 
-@role_router.post("/users", response_model=UserOut, status_code=status.HTTP_201_CREATED)
+@role_router.post("/api/roles-users", response_model=UserOut, status_code=status.HTTP_201_CREATED)
 def create_user(body: UserIn):
     with get_session() as s:
         return repo.create_user(s, body.username, body.email)
 
 
 @role_router.get("/users", response_model=list[UserOut])
-def list_users_api_users_get():
+def list_users():
     with get_session() as s:
         return repo.get_all_users(s)
 
