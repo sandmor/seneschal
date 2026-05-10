@@ -16,3 +16,7 @@ class ResourceAlreadyExistsError(DomainError):
 
 class DirectoryNotEmptyError(DomainError):
     """Raised when deleting a non-empty directory without recursion."""
+
+
+class InvalidCredentialsError(DomainError):
+    """Raised when a login attempt uses unsupported credentials."""

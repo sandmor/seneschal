@@ -1,13 +1,20 @@
 from __future__ import annotations
+
 import os
 from pathlib import Path
 from urllib.parse import urlsplit, urlunsplit
+
 from dotenv import load_dotenv
 from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+
+from src.adapters.database import init_db
+from src.adapters.in_memory_token_store import InMemoryTokenStore
 from src.adapters.local_storage import LocalStorageAdapter
+from src.application.auth_service import AuthService
 from src.application.document_management_service import DocumentManagementService
+from src.application.user_service import UserService
 from src.domain.domain_errors import (
     DirectoryNotEmptyError,
     InvalidPathError,
@@ -15,7 +22,6 @@ from src.domain.domain_errors import (
     ResourceNotFoundError,
 )
 from src.presentation.api_router import create_api_router
-from src.adapters.database import init_db
 from src.presentation.role_router import role_router
 
 
@@ -24,9 +30,17 @@ def create_app() -> FastAPI:
     init_db()
     storage = LocalStorageAdapter(_resolve_data_directory())
     service = DocumentManagementService(storage=storage)
+    _token_store = InMemoryTokenStore()
+    auth_service = AuthService(
+        admin_username=os.getenv("ADMIN_USERNAME", "admin"),
+        admin_password=os.getenv("ADMIN_PASSWORD", "admin123"),
+        token_store=_token_store,
+    )
+    user_service = UserService()
+
     app = FastAPI(
         title="Seneschal API",
-        summary="Document management API for directories and markdown documents.",
+        summary="Document management API for directories, markdown documents, and authentication.",
     )
     app.add_middleware(
         CORSMiddleware,
@@ -35,7 +49,7 @@ def create_app() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
-    app.include_router(create_api_router(service))
+    app.include_router(create_api_router(service, auth_service, user_service, _token_store))
     app.include_router(role_router)
 
     @app.exception_handler(InvalidPathError)
