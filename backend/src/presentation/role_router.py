@@ -77,7 +77,7 @@ def create_user(body: UserIn):
 
 
 @role_router.get("/users", response_model=list[UserOut])
-def list_users():
+def list_users_api_users_get():
     with get_session() as s:
         return repo.get_all_users(s)
 
