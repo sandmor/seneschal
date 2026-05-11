@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 import os
+from contextlib import asynccontextmanager
 from pathlib import Path
 from urllib.parse import urlsplit, urlunsplit
 
 from dotenv import load_dotenv
-from fastapi import FastAPI, Request, status
+from fastapi import FastAPI, Request, WebSocket, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
@@ -21,6 +22,14 @@ from src.domain.domain_errors import (
     ResourceNotFoundError,
 )
 from src.presentation.api_router import create_api_router
+from src.presentation.websocket_handler import handle_document_websocket, websocket_server
+
+
+@asynccontextmanager
+async def lifespan(_: FastAPI):
+    """Manage the application lifespan events, like starting the websocket server."""
+    async with websocket_server:
+        yield
 
 
 def create_app() -> FastAPI:
@@ -39,6 +48,7 @@ def create_app() -> FastAPI:
     app = FastAPI(
         title="Seneschal API",
         summary="Document management API for directories, markdown documents, and authentication.",
+        lifespan=lifespan,
     )
 
     app.add_middleware(
@@ -50,6 +60,10 @@ def create_app() -> FastAPI:
     )
 
     app.include_router(create_api_router(service, auth_service, user_service, token_store))
+
+    @app.websocket("/ws/documents/{path:path}")
+    async def document_websocket(websocket: WebSocket, path: str) -> None:
+        await handle_document_websocket(websocket, path)
 
     @app.exception_handler(InvalidPathError)
     async def handle_invalid_path(_: Request, error: InvalidPathError) -> JSONResponse:
