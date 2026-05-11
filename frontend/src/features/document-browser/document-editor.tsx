@@ -4,6 +4,8 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { RichEditor } from '@/features/editor/rich-editor';
 import { cn } from '@/lib/utils';
 import { ArrowLeftIcon, TrashIcon } from '@/features/document-browser/icons';
+import type * as Y from 'yjs';
+import type { WebsocketProvider } from 'y-websocket';
 
 export interface Breadcrumb {
   path: string;
@@ -35,6 +37,8 @@ export interface DocumentEditorProps {
   onDocumentContentChange: (content: string) => void;
   onDelete: () => void;
   onKeyDown?: (e: React.KeyboardEvent<HTMLInputElement>) => void;
+  ydoc?: Y.Doc;
+  provider?: WebsocketProvider;
 }
 
 /**
@@ -55,6 +59,8 @@ export function DocumentEditor({
   onDocumentContentChange,
   onDelete,
   onKeyDown,
+  ydoc,
+  provider,
 }: DocumentEditorProps) {
   return (
     <>
@@ -123,6 +129,8 @@ export function DocumentEditor({
           onChange={onDocumentContentChange}
           autofocus
           className="flex-1"
+          ydoc={ydoc}
+          provider={provider}
         />
       </div>
     </>
