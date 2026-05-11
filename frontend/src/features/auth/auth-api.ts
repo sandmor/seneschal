@@ -1,40 +1,67 @@
-// 🔥 MOCK API — Auth
+// 🔥 MOCK API — Auth (independiente de orval)
 
+// Tipos que imitan lo que el backend real retorna
 export type LoginResponse = {
-  accessToken: string;
-  tokenType: string;
+  token: string;
 };
 
 export type AdminProfileResponse = {
   id: string;
+  name: string;
   username: string;
   email: string;
+  role: string;
+  roles: string[];
   isAdmin: boolean;
 };
 
 export type UserResponse = {
-  id: string;
+  id: number;
+  name: string;
   username: string;
   email: string;
-  isAdmin: boolean;
+  roles: string[];
 };
 
 const TOKEN_KEY = 'seneschal.auth.token';
 
 const mockUsers: UserResponse[] = [
-  { id: 'user_1', username: 'santiago', email: 'santiago@example.com', isAdmin: true },
-  { id: 'user_2', username: 'ana', email: 'ana@example.com', isAdmin: false },
-  { id: 'user_3', username: 'carlos', email: 'carlos@example.com', isAdmin: false },
+  {
+    id: 1,
+    name: 'Santiago Morales',
+    username: 'santiago',
+    email: 'santiago@example.com',
+    roles: ['Admin'],
+  },
+  { id: 2, name: 'Ana García', username: 'ana', email: 'ana@example.com', roles: ['Editor'] },
+  {
+    id: 3,
+    name: 'Carlos López',
+    username: 'carlos',
+    email: 'carlos@example.com',
+    roles: ['Viewer'],
+  },
 ];
 
 const mockProfiles: Record<string, AdminProfileResponse> = {
   'mock-token-santiago': {
     id: 'user_1',
+    name: 'Santiago Morales',
     username: 'santiago',
     email: 'santiago@example.com',
+    role: 'Admin',
+    roles: ['Admin'],
     isAdmin: true,
   },
-  'mock-token-ana': { id: 'user_2', username: 'ana', email: 'ana@example.com', isAdmin: false },
+  'mock-token-ana': {
+    id: 'user_2',
+    name: 'Ana García',
+    username: 'ana',
+    email: 'ana@example.com',
+    role: 'Editor',
+    roles: ['Editor'],
+    isAdmin: false,
+  },
 };
 
 export function getStoredAuthToken() {
@@ -55,8 +82,7 @@ export async function login(username: string, password: string): Promise<LoginRe
   void password;
   const user = mockUsers.find((u) => u.username === username);
   if (!user) throw new Error('Invalid username or password');
-  const accessToken = `mock-token-${username}`;
-  return { accessToken, tokenType: 'bearer' };
+  return { token: `mock-token-${username}` };
 }
 
 export async function logout(token: string): Promise<void> {
