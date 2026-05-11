@@ -107,7 +107,13 @@ export async function updateDirectory(path: string, newPath: string): Promise<Ex
   if (parent) {
     parent.children = parent.children.map((c) => (c === path ? newPath : c));
   }
-  return { path: newPath, name, children: [], child_directories_count: 0, child_documents_count: 0 };
+  return {
+    path: newPath,
+    name,
+    children: [],
+    child_directories_count: 0,
+    child_documents_count: 0,
+  };
 }
 
 export async function deleteDirectory(path: string, _recursive: boolean): Promise<void> {

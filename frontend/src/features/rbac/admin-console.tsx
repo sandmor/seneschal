@@ -51,10 +51,7 @@ export function AdminConsole({ open, onClose }: AdminConsoleProps) {
   return (
     <>
       {/* Backdrop */}
-      <div
-        className="fixed inset-0 z-40 bg-black/40 backdrop-blur-[2px]"
-        onClick={onClose}
-      />
+      <div className="fixed inset-0 z-40 bg-black/40 backdrop-blur-[2px]" onClick={onClose} />
 
       {/* Panel */}
       <div className="fixed inset-y-0 right-0 z-50 flex w-full max-w-3xl flex-col border-l border-border bg-card shadow-2xl">
@@ -66,7 +63,9 @@ export function AdminConsole({ open, onClose }: AdminConsoleProps) {
             </span>
             <div>
               <h2 className="font-heading text-sm font-semibold text-foreground">Admin Console</h2>
-              <p className="text-[10px] text-muted-foreground">Roles, permissions & access control</p>
+              <p className="text-[10px] text-muted-foreground">
+                Roles, permissions & access control
+              </p>
             </div>
           </div>
           <button
@@ -105,9 +104,7 @@ export function AdminConsole({ open, onClose }: AdminConsoleProps) {
           {tab === 'permissions' && (
             <PermissionsTab permissions={permissions} onRefresh={refreshAll} />
           )}
-          {tab === 'users' && (
-            <UsersTab users={users} roles={roles} onRefresh={refreshAll} />
-          )}
+          {tab === 'users' && <UsersTab users={users} roles={roles} onRefresh={refreshAll} />}
         </div>
       </div>
     </>
@@ -116,7 +113,15 @@ export function AdminConsole({ open, onClose }: AdminConsoleProps) {
 
 // ─── Roles Tab ────────────────────────────────────────────────────────────────
 
-function RolesTab({ roles, permissions, onRefresh }: { roles: Role[]; permissions: Permission[]; onRefresh: () => Promise<void> }) {
+function RolesTab({
+  roles,
+  permissions,
+  onRefresh,
+}: {
+  roles: Role[];
+  permissions: Permission[];
+  onRefresh: () => Promise<void>;
+}) {
   const [editingRole, setEditingRole] = useState<Role | null>(null);
   const [isCreating, setIsCreating] = useState(false);
   const [form, setForm] = useState({ name: '', description: '', permissionIds: [] as string[] });
@@ -129,7 +134,11 @@ function RolesTab({ roles, permissions, onRefresh }: { roles: Role[]; permission
   };
 
   const openEdit = (role: Role) => {
-    setForm({ name: role.name, description: role.description, permissionIds: [...role.permissionIds] });
+    setForm({
+      name: role.name,
+      description: role.description,
+      permissionIds: [...role.permissionIds],
+    });
     setEditingRole(role);
     setIsCreating(false);
   };
@@ -215,7 +224,9 @@ function RolesTab({ roles, permissions, onRefresh }: { roles: Role[]; permission
                   {role.permissionIds.slice(0, 4).map((pid) => {
                     const perm = permissions.find((p) => p.id === pid);
                     return perm ? (
-                      <Badge key={pid} className="text-[10px]">{perm.name}</Badge>
+                      <Badge key={pid} className="text-[10px]">
+                        {perm.name}
+                      </Badge>
                     ) : null;
                   })}
                   {role.permissionIds.length > 4 && (
@@ -224,8 +235,17 @@ function RolesTab({ roles, permissions, onRefresh }: { roles: Role[]; permission
                 </div>
               </div>
               <div className="flex shrink-0 gap-1">
-                <Button size="sm" variant="ghost" onClick={() => openEdit(role)}>Edit</Button>
-                <Button size="sm" variant="destructive" onClick={() => handleDelete(role.id)} disabled={busy}>Delete</Button>
+                <Button size="sm" variant="ghost" onClick={() => openEdit(role)}>
+                  Edit
+                </Button>
+                <Button
+                  size="sm"
+                  variant="destructive"
+                  onClick={() => handleDelete(role.id)}
+                  disabled={busy}
+                >
+                  Delete
+                </Button>
               </div>
             </div>
           </div>
@@ -241,19 +261,33 @@ function RolesTab({ roles, permissions, onRefresh }: { roles: Role[]; permission
           <div className="grid gap-3 sm:grid-cols-2">
             <div>
               <label className="mb-1 block text-xs font-medium text-muted-foreground">Name</label>
-              <Input value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} placeholder="e.g. Editor" />
+              <Input
+                value={form.name}
+                onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+                placeholder="e.g. Editor"
+              />
             </div>
             <div>
-              <label className="mb-1 block text-xs font-medium text-muted-foreground">Description</label>
-              <Input value={form.description} onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))} placeholder="What can this role do?" />
+              <label className="mb-1 block text-xs font-medium text-muted-foreground">
+                Description
+              </label>
+              <Input
+                value={form.description}
+                onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
+                placeholder="What can this role do?"
+              />
             </div>
           </div>
           <div>
-            <label className="mb-2 block text-xs font-medium text-muted-foreground">Permissions</label>
+            <label className="mb-2 block text-xs font-medium text-muted-foreground">
+              Permissions
+            </label>
             <div className="space-y-3">
               {Object.entries(groupedPerms).map(([resource, perms]) => (
                 <div key={resource}>
-                  <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">{resource}</p>
+                  <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                    {resource}
+                  </p>
                   <div className="flex flex-wrap gap-2">
                     {perms.map((perm) => {
                       const selected = form.permissionIds.includes(perm.id);
@@ -279,7 +313,9 @@ function RolesTab({ roles, permissions, onRefresh }: { roles: Role[]; permission
             </div>
           </div>
           <div className="flex justify-end gap-2">
-            <Button variant="ghost" size="sm" onClick={closeForm}>Cancel</Button>
+            <Button variant="ghost" size="sm" onClick={closeForm}>
+              Cancel
+            </Button>
             <Button size="sm" onClick={handleSave} disabled={busy || !form.name.trim()}>
               {editingRole ? 'Save changes' : 'Create role'}
             </Button>
@@ -294,10 +330,21 @@ function RolesTab({ roles, permissions, onRefresh }: { roles: Role[]; permission
 
 const ACTIONS = ['create', 'read', 'update', 'delete', 'manage'] as const;
 
-function PermissionsTab({ permissions, onRefresh }: { permissions: Permission[]; onRefresh: () => Promise<void> }) {
+function PermissionsTab({
+  permissions,
+  onRefresh,
+}: {
+  permissions: Permission[];
+  onRefresh: () => Promise<void>;
+}) {
   const [isCreating, setIsCreating] = useState(false);
   const [editingPerm, setEditingPerm] = useState<Permission | null>(null);
-  const [form, setForm] = useState({ name: '', description: '', resource: '', action: 'read' as Permission['action'] });
+  const [form, setForm] = useState({
+    name: '',
+    description: '',
+    resource: '',
+    action: 'read' as Permission['action'],
+  });
   const [busy, setBusy] = useState(false);
 
   const openCreate = () => {
@@ -307,12 +354,20 @@ function PermissionsTab({ permissions, onRefresh }: { permissions: Permission[];
   };
 
   const openEdit = (perm: Permission) => {
-    setForm({ name: perm.name, description: perm.description, resource: perm.resource, action: perm.action });
+    setForm({
+      name: perm.name,
+      description: perm.description,
+      resource: perm.resource,
+      action: perm.action,
+    });
     setEditingPerm(perm);
     setIsCreating(false);
   };
 
-  const closeForm = () => { setIsCreating(false); setEditingPerm(null); };
+  const closeForm = () => {
+    setIsCreating(false);
+    setEditingPerm(null);
+  };
 
   const handleSave = async () => {
     if (!form.name.trim() || !form.resource.trim()) return;
@@ -362,7 +417,9 @@ function PermissionsTab({ permissions, onRefresh }: { permissions: Permission[];
       <div className="space-y-4">
         {Object.entries(grouped).map(([resource, perms]) => (
           <div key={resource}>
-            <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">{resource}</p>
+            <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+              {resource}
+            </p>
             <div className="overflow-hidden rounded-lg border border-border">
               {perms.map((perm, i) => (
                 <div
@@ -375,17 +432,34 @@ function PermissionsTab({ permissions, onRefresh }: { permissions: Permission[];
                 >
                   <div className="min-w-0">
                     <span className="block text-xs font-medium text-foreground">{perm.name}</span>
-                    <span className="block text-[11px] text-muted-foreground">{perm.description}</span>
+                    <span className="block text-[11px] text-muted-foreground">
+                      {perm.description}
+                    </span>
                   </div>
                   <div className="flex shrink-0 items-center gap-2">
-                    <span className={cn(
-                      'rounded px-2 py-0.5 text-[10px] font-medium',
-                      perm.action === 'manage' ? 'bg-destructive/10 text-destructive' :
-                      perm.action === 'delete' ? 'bg-orange-500/10 text-orange-600' :
-                      'bg-primary/10 text-primary',
-                    )}>{perm.action}</span>
-                    <Button size="sm" variant="ghost" onClick={() => openEdit(perm)}>Edit</Button>
-                    <Button size="sm" variant="destructive" onClick={() => handleDelete(perm.id)} disabled={busy}>Delete</Button>
+                    <span
+                      className={cn(
+                        'rounded px-2 py-0.5 text-[10px] font-medium',
+                        perm.action === 'manage'
+                          ? 'bg-destructive/10 text-destructive'
+                          : perm.action === 'delete'
+                            ? 'bg-orange-500/10 text-orange-600'
+                            : 'bg-primary/10 text-primary',
+                      )}
+                    >
+                      {perm.action}
+                    </span>
+                    <Button size="sm" variant="ghost" onClick={() => openEdit(perm)}>
+                      Edit
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="destructive"
+                      onClick={() => handleDelete(perm.id)}
+                      disabled={busy}
+                    >
+                      Delete
+                    </Button>
                   </div>
                 </div>
               ))}
@@ -402,29 +476,53 @@ function PermissionsTab({ permissions, onRefresh }: { permissions: Permission[];
           <div className="grid gap-3 sm:grid-cols-2">
             <div>
               <label className="mb-1 block text-xs font-medium text-muted-foreground">Name</label>
-              <Input value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} placeholder="documents.read" />
+              <Input
+                value={form.name}
+                onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+                placeholder="documents.read"
+              />
             </div>
             <div>
-              <label className="mb-1 block text-xs font-medium text-muted-foreground">Resource</label>
-              <Input value={form.resource} onChange={(e) => setForm((f) => ({ ...f, resource: e.target.value }))} placeholder="documents" />
+              <label className="mb-1 block text-xs font-medium text-muted-foreground">
+                Resource
+              </label>
+              <Input
+                value={form.resource}
+                onChange={(e) => setForm((f) => ({ ...f, resource: e.target.value }))}
+                placeholder="documents"
+              />
             </div>
             <div>
               <label className="mb-1 block text-xs font-medium text-muted-foreground">Action</label>
               <select
                 value={form.action}
-                onChange={(e) => setForm((f) => ({ ...f, action: e.target.value as Permission['action'] }))}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, action: e.target.value as Permission['action'] }))
+                }
                 className="w-full rounded-md border border-input bg-background px-3 py-2 text-xs text-foreground"
               >
-                {ACTIONS.map((a) => <option key={a} value={a}>{a}</option>)}
+                {ACTIONS.map((a) => (
+                  <option key={a} value={a}>
+                    {a}
+                  </option>
+                ))}
               </select>
             </div>
             <div>
-              <label className="mb-1 block text-xs font-medium text-muted-foreground">Description</label>
-              <Input value={form.description} onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))} placeholder="What does this allow?" />
+              <label className="mb-1 block text-xs font-medium text-muted-foreground">
+                Description
+              </label>
+              <Input
+                value={form.description}
+                onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
+                placeholder="What does this allow?"
+              />
             </div>
           </div>
           <div className="flex justify-end gap-2">
-            <Button variant="ghost" size="sm" onClick={closeForm}>Cancel</Button>
+            <Button variant="ghost" size="sm" onClick={closeForm}>
+              Cancel
+            </Button>
             <Button size="sm" onClick={handleSave} disabled={busy || !form.name.trim()}>
               {editingPerm ? 'Save changes' : 'Create'}
             </Button>
@@ -437,7 +535,15 @@ function PermissionsTab({ permissions, onRefresh }: { permissions: Permission[];
 
 // ─── Users Tab ────────────────────────────────────────────────────────────────
 
-function UsersTab({ users, roles, onRefresh }: { users: RbacUser[]; roles: Role[]; onRefresh: () => Promise<void> }) {
+function UsersTab({
+  users,
+  roles,
+  onRefresh,
+}: {
+  users: RbacUser[];
+  roles: Role[];
+  onRefresh: () => Promise<void>;
+}) {
   const [editingUser, setEditingUser] = useState<RbacUser | null>(null);
   const [selectedRoles, setSelectedRoles] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
@@ -447,7 +553,10 @@ function UsersTab({ users, roles, onRefresh }: { users: RbacUser[]; roles: Role[
     setSelectedRoles([...user.roleIds]);
   };
 
-  const closeEdit = () => { setEditingUser(null); setSelectedRoles([]); };
+  const closeEdit = () => {
+    setEditingUser(null);
+    setSelectedRoles([]);
+  };
 
   const toggleRole = (roleId: string) => {
     setSelectedRoles((prev) =>
@@ -500,11 +609,17 @@ function UsersTab({ users, roles, onRefresh }: { users: RbacUser[]; roles: Role[
                   )}
                   {user.roleIds.map((rid) => {
                     const role = roles.find((r) => r.id === rid);
-                    return role ? <Badge key={rid} className="text-[10px]">{role.name}</Badge> : null;
+                    return role ? (
+                      <Badge key={rid} className="text-[10px]">
+                        {role.name}
+                      </Badge>
+                    ) : null;
                   })}
                 </div>
               </div>
-              <Button size="sm" variant="ghost" onClick={() => openEdit(user)}>Edit roles</Button>
+              <Button size="sm" variant="ghost" onClick={() => openEdit(user)}>
+                Edit roles
+              </Button>
             </div>
 
             {editingUser?.id === user.id && (
@@ -531,8 +646,12 @@ function UsersTab({ users, roles, onRefresh }: { users: RbacUser[]; roles: Role[
                   })}
                 </div>
                 <div className="flex justify-end gap-2">
-                  <Button variant="ghost" size="sm" onClick={closeEdit}>Cancel</Button>
-                  <Button size="sm" onClick={handleSave} disabled={busy}>Save</Button>
+                  <Button variant="ghost" size="sm" onClick={closeEdit}>
+                    Cancel
+                  </Button>
+                  <Button size="sm" onClick={handleSave} disabled={busy}>
+                    Save
+                  </Button>
                 </div>
               </div>
             )}
@@ -546,7 +665,13 @@ function UsersTab({ users, roles, onRefresh }: { users: RbacUser[]; roles: Role[
 // ─── Icons ────────────────────────────────────────────────────────────────────
 
 const ShieldIcon = ({ className }: { className?: string }) => (
-  <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="1.8">
+  <svg
+    viewBox="0 0 24 24"
+    className={className}
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="1.8"
+  >
     <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
   </svg>
 );
