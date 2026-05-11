@@ -26,22 +26,114 @@ export type RbacUser = {
 // 🧠 Estado en memoria
 const store = {
   permissions: new Map<string, Permission>([
-    ['perm_1', { id: 'perm_1', name: 'documents.read', description: 'Read documents', resource: 'documents', action: 'read' }],
-    ['perm_2', { id: 'perm_2', name: 'documents.create', description: 'Create documents', resource: 'documents', action: 'create' }],
-    ['perm_3', { id: 'perm_3', name: 'documents.update', description: 'Edit documents', resource: 'documents', action: 'update' }],
-    ['perm_4', { id: 'perm_4', name: 'documents.delete', description: 'Delete documents', resource: 'documents', action: 'delete' }],
-    ['perm_5', { id: 'perm_5', name: 'roles.manage', description: 'Manage roles', resource: 'roles', action: 'manage' }],
-    ['perm_6', { id: 'perm_6', name: 'users.manage', description: 'Manage users', resource: 'users', action: 'manage' }],
+    [
+      'perm_1',
+      {
+        id: 'perm_1',
+        name: 'documents.read',
+        description: 'Read documents',
+        resource: 'documents',
+        action: 'read',
+      },
+    ],
+    [
+      'perm_2',
+      {
+        id: 'perm_2',
+        name: 'documents.create',
+        description: 'Create documents',
+        resource: 'documents',
+        action: 'create',
+      },
+    ],
+    [
+      'perm_3',
+      {
+        id: 'perm_3',
+        name: 'documents.update',
+        description: 'Edit documents',
+        resource: 'documents',
+        action: 'update',
+      },
+    ],
+    [
+      'perm_4',
+      {
+        id: 'perm_4',
+        name: 'documents.delete',
+        description: 'Delete documents',
+        resource: 'documents',
+        action: 'delete',
+      },
+    ],
+    [
+      'perm_5',
+      {
+        id: 'perm_5',
+        name: 'roles.manage',
+        description: 'Manage roles',
+        resource: 'roles',
+        action: 'manage',
+      },
+    ],
+    [
+      'perm_6',
+      {
+        id: 'perm_6',
+        name: 'users.manage',
+        description: 'Manage users',
+        resource: 'users',
+        action: 'manage',
+      },
+    ],
   ]),
   roles: new Map<string, Role>([
-    ['role_1', { id: 'role_1', name: 'Admin', description: 'Full access to everything', permissionIds: ['perm_1', 'perm_2', 'perm_3', 'perm_4', 'perm_5', 'perm_6'], createdAt: '2024-01-01' }],
-    ['role_2', { id: 'role_2', name: 'Editor', description: 'Can read and edit documents', permissionIds: ['perm_1', 'perm_2', 'perm_3'], createdAt: '2024-01-02' }],
-    ['role_3', { id: 'role_3', name: 'Viewer', description: 'Read-only access', permissionIds: ['perm_1'], createdAt: '2024-01-03' }],
+    [
+      'role_1',
+      {
+        id: 'role_1',
+        name: 'Admin',
+        description: 'Full access to everything',
+        permissionIds: ['perm_1', 'perm_2', 'perm_3', 'perm_4', 'perm_5', 'perm_6'],
+        createdAt: '2024-01-01',
+      },
+    ],
+    [
+      'role_2',
+      {
+        id: 'role_2',
+        name: 'Editor',
+        description: 'Can read and edit documents',
+        permissionIds: ['perm_1', 'perm_2', 'perm_3'],
+        createdAt: '2024-01-02',
+      },
+    ],
+    [
+      'role_3',
+      {
+        id: 'role_3',
+        name: 'Viewer',
+        description: 'Read-only access',
+        permissionIds: ['perm_1'],
+        createdAt: '2024-01-03',
+      },
+    ],
   ]),
   users: new Map<string, RbacUser>([
-    ['user_1', { id: 'user_1', name: 'Santiago Morales', email: 'santiago@example.com', roleIds: ['role_1'] }],
+    [
+      'user_1',
+      {
+        id: 'user_1',
+        name: 'Santiago Morales',
+        email: 'santiago@example.com',
+        roleIds: ['role_1'],
+      },
+    ],
     ['user_2', { id: 'user_2', name: 'Ana García', email: 'ana@example.com', roleIds: ['role_2'] }],
-    ['user_3', { id: 'user_3', name: 'Carlos López', email: 'carlos@example.com', roleIds: ['role_3'] }],
+    [
+      'user_3',
+      { id: 'user_3', name: 'Carlos López', email: 'carlos@example.com', roleIds: ['role_3'] },
+    ],
   ]),
 };
 
@@ -60,7 +152,10 @@ export async function createPermission(data: Omit<Permission, 'id'>): Promise<Pe
   return permission;
 }
 
-export async function updatePermission(id: string, data: Partial<Omit<Permission, 'id'>>): Promise<Permission> {
+export async function updatePermission(
+  id: string,
+  data: Partial<Omit<Permission, 'id'>>,
+): Promise<Permission> {
   const existing = store.permissions.get(id);
   if (!existing) throw new Error('Permission not found');
   const updated = { ...existing, ...data };
@@ -88,7 +183,10 @@ export async function createRole(data: Omit<Role, 'id' | 'createdAt'>): Promise<
   return role;
 }
 
-export async function updateRole(id: string, data: Partial<Omit<Role, 'id' | 'createdAt'>>): Promise<Role> {
+export async function updateRole(
+  id: string,
+  data: Partial<Omit<Role, 'id' | 'createdAt'>>,
+): Promise<Role> {
   const existing = store.roles.get(id);
   if (!existing) throw new Error('Role not found');
   const updated = { ...existing, ...data };

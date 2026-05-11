@@ -29,7 +29,12 @@ const mockUsers: UserResponse[] = [
 ];
 
 const mockProfiles: Record<string, AdminProfileResponse> = {
-  'mock-token-santiago': { id: 'user_1', username: 'santiago', email: 'santiago@example.com', is_admin: true },
+  'mock-token-santiago': {
+    id: 'user_1',
+    username: 'santiago',
+    email: 'santiago@example.com',
+    is_admin: true,
+  },
   'mock-token-ana': { id: 'user_2', username: 'ana', email: 'ana@example.com', is_admin: false },
 };
 
