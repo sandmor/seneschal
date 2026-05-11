@@ -59,7 +59,6 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
     app.include_router(create_api_router(service, auth_service, user_service, _token_store))
-    app.include_router(role_router)
 
     @app.websocket("/ws/documents/{path:path}")
     async def document_websocket(websocket: WebSocket, path: str) -> None:
