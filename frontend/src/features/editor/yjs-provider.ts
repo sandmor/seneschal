@@ -19,24 +19,15 @@ export function createYjsProvider({ documentPath, token, apiUrl }: YjsProviderOp
 
   // Convert http(s) API URL to ws(s) WebSocket URL
   const wsBaseUrl = apiUrl.replace(/^http/, 'ws');
-  const roomName = documentPath
-    .replace(/^\/+/, '')
-    .split('/')
-    .map(encodeURIComponent)
-    .join('/');
+  const roomName = documentPath.replace(/^\/+/, '').split('/').map(encodeURIComponent).join('/');
 
-  const provider = new WebsocketProvider(
-    `${wsBaseUrl}/ws/documents`,
-    roomName,
-    ydoc,
-    {
-      params: token ? { token } : {},
-      protocols: ['y-websocket'],
-      connect: true,
-      resyncInterval: 10000,
-      maxBackoffTime: 10000,
-    },
-  );
+  const provider = new WebsocketProvider(`${wsBaseUrl}/ws/documents`, roomName, ydoc, {
+    params: token ? { token } : {},
+    protocols: ['y-websocket'],
+    connect: true,
+    resyncInterval: 10000,
+    maxBackoffTime: 10000,
+  });
 
   provider.awareness.setLocalStateField('user', createPresenceUser(token));
   bindPresenceCleanup(provider);
