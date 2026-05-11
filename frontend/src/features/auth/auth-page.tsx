@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { type SubmitEvent, useEffect, useState } from 'react';
-import type { AdminProfileResponse } from '@/api/models';
+import type { AdminProfileResponse } from '@/features/auth/auth-api';
 import { AppShell } from '@/components/app-shell';
 import { Sidebar } from '@/components/sidebar';
 import { Badge } from '@/components/ui/badge';
