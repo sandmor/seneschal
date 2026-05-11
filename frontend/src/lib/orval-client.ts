@@ -18,7 +18,7 @@ function resolveBrowserBaseUrl() {
   return PUBLIC_API_URL || undefined;
 }
 
-function resolveBaseUrl() {
+export function resolveBaseUrl() {
   return (
     resolveBrowserBaseUrl() ??
     process.env.INTERNAL_API_URL ??

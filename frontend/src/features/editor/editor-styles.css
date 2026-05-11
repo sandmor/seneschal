@@ -189,3 +189,98 @@
 .ProseMirror-focused > *:focus-within {
   outline: none;
 }
+
+/* Remote presence overlay */
+.seneschal-collab-overlay {
+  position: absolute;
+  inset: 0;
+  overflow: visible;
+  pointer-events: none;
+  user-select: none;
+  z-index: 6;
+}
+
+.seneschal-collab-presence {
+  --collab-color: var(--primary);
+  position: absolute;
+  inset: 0;
+}
+
+.seneschal-collab-cursor {
+  --collab-color: var(--primary);
+  position: absolute;
+  display: inline-block;
+  width: 0;
+  margin-left: -1px;
+  pointer-events: none;
+  user-select: none;
+  will-change: transform;
+}
+
+.seneschal-collab-caret {
+  position: absolute;
+  inset-block: 0.02em -0.05em;
+  left: 0;
+  width: 2px;
+  border-radius: 999px;
+  background: var(--collab-color);
+}
+
+.seneschal-collab-label {
+  position: absolute;
+  top: -2.15rem;
+  left: -0.45rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  max-width: 12rem;
+  padding: 0.24rem 0.48rem 0.25rem 0.38rem;
+  border: 1px solid color-mix(in oklab, var(--collab-color) 35%, var(--border));
+  border-radius: 999px;
+  background: var(--card);
+  color: var(--foreground);
+  box-shadow: 0 1px 3px color-mix(in oklab, var(--foreground) 8%, transparent);
+  font-family: 'DM Sans Variable', sans-serif;
+  font-size: 0.68rem;
+  font-weight: 650;
+  letter-spacing: 0.01em;
+  line-height: 1;
+  white-space: nowrap;
+  animation: collab-label-enter 120ms ease-out both;
+}
+
+.seneschal-collab-label-chip {
+  width: 0.42rem;
+  height: 0.42rem;
+  flex: 0 0 auto;
+  border-radius: 999px;
+  background: var(--collab-color);
+}
+
+.seneschal-collab-label-name {
+  overflow: hidden;
+  max-width: 9rem;
+  text-overflow: ellipsis;
+}
+
+.seneschal-collab-selection {
+  position: absolute;
+  border-radius: 0.18em;
+  background: color-mix(in oklab, var(--collab-color) 14%, transparent);
+  will-change: transform;
+}
+
+.dark .seneschal-collab-label {
+  background: var(--card);
+  box-shadow: 0 1px 3px rgb(0 0 0 / 0.2);
+}
+
+@keyframes collab-label-enter {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}

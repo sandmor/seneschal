@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { EditorState, Transaction } from 'prosemirror-state';
+import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react';
+import { EditorState, Transaction, Plugin } from 'prosemirror-state';
 import { EditorView } from 'prosemirror-view';
 import { Schema } from 'prosemirror-model';
 import {
@@ -11,8 +11,21 @@ import {
 } from 'prosemirror-commands';
 import { liftListItem, sinkListItem, splitListItem, wrapInList } from 'prosemirror-schema-list';
 import { keymap } from 'prosemirror-keymap';
-import { history, redo, undo } from 'prosemirror-history';
-import { inputRules } from 'prosemirror-inputrules';
+import { history, redo as prosemirrorRedo, undo as prosemirrorUndo } from 'prosemirror-history';
+import { inputRules, wrappingInputRule, textblockTypeInputRule } from 'prosemirror-inputrules';
+import * as Y from 'yjs';
+import { WebsocketProvider } from 'y-websocket';
+import {
+  ySyncPlugin,
+  yUndoPlugin,
+  yUndoPluginKey,
+  prosemirrorToYXmlFragment,
+  undoCommand as yUndoCommand,
+  redoCommand as yRedoCommand,
+  absolutePositionToRelativePosition,
+  relativePositionToAbsolutePosition,
+  ySyncPluginKey,
+} from 'y-prosemirror';
 import {
   TextBoldIcon,
   TextItalicIcon,
@@ -35,6 +48,38 @@ export type RichEditorProps = {
   onChange?: (markdown: string) => void;
   className?: string;
   autofocus?: boolean;
+  ydoc?: Y.Doc;
+  provider?: WebsocketProvider;
+};
+
+type PresenceUser = {
+  color: string;
+  name: string;
+  tabId?: string;
+};
+
+type PresenceOverlayItem = {
+  clientId: number;
+  user: PresenceUser;
+  caret: {
+    left: number;
+    top: number;
+    height: number;
+  };
+  selections: Array<{
+    left: number;
+    top: number;
+    width: number;
+    height: number;
+  }>;
+};
+
+type PresenceCandidate = {
+  anchor: number;
+  clientId: number;
+  head: number;
+  lastUpdated: number;
+  user: PresenceUser;
 };
 
 function createEditorKeymap(schema: Schema) {
@@ -43,9 +88,6 @@ function createEditorKeymap(schema: Schema) {
     string,
     (state: EditorState, dispatch?: (tr: Transaction) => void) => boolean
   > = {
-    'Mod-z': undo,
-    'Mod-Shift-z': redo,
-    'Mod-y': redo,
     'Mod-b': toggleMark(schema.marks.strong),
     'Mod-i': toggleMark(schema.marks.em),
     'Mod-`': toggleCode(schema),
@@ -96,38 +138,108 @@ function toggleCode(schema: Schema) {
   return toggleMark(schema.marks.code);
 }
 
+function getUndoRedoCommands(state: EditorState | null) {
+  if (state && yUndoPluginKey.getState(state)) {
+    return { undo: yUndoCommand, redo: yRedoCommand };
+  }
+  return { undo: prosemirrorUndo, redo: prosemirrorRedo };
+}
+
 export function RichEditor({
   initialContent,
   onChange,
   className,
   autofocus = false,
+  ydoc,
+  provider,
 }: RichEditorProps) {
   const containerRef = useRef<HTMLDivElement>(null);
+  const editorSurfaceRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
   const [editorState, setEditorState] = useState<EditorState | null>(null);
+  const [presenceItems, setPresenceItems] = useState<PresenceOverlayItem[]>([]);
   const onChangeRef = useRef(onChange);
   onChangeRef.current = onChange;
 
   useEffect(() => {
-    if (!containerRef.current || viewRef.current) return;
+    if (!containerRef.current) return;
 
-    const state = EditorState.create({
-      doc: parseMarkdown(initialContent || ''),
-      schema: markdownSchema,
-      plugins: [
+    const plugins: Plugin[] = [
+      createEditorKeymap(markdownSchema),
+      keymap(baseKeymap),
+      inputRules({ rules: buildInputRules(markdownSchema) }),
+    ];
+
+    let state: EditorState;
+    let removeProviderSyncListener: (() => void) | undefined;
+
+    if (ydoc) {
+      const yXmlFragment = ydoc.get('prosemirror', Y.XmlFragment);
+      plugins.unshift(ySyncPlugin(yXmlFragment));
+      if (provider) {
+        plugins.push(createPresenceAwarenessPlugin(provider));
+      }
+      plugins.push(yUndoPlugin());
+      plugins.push(
+        keymap({ 'Mod-z': yUndoCommand, 'Mod-Shift-z': yRedoCommand, 'Mod-y': yRedoCommand }),
+      );
+
+      state = EditorState.create({
+        schema: markdownSchema,
+        plugins,
+      });
+
+      const handleSync = (isSynced: boolean) => {
+        if (!isSynced) return;
+        if (yXmlFragment.length === 0 && initialContent) {
+          const pmDoc = parseMarkdown(initialContent);
+          if (pmDoc) {
+            prosemirrorToYXmlFragment(pmDoc, yXmlFragment);
+          }
+        }
+      };
+
+      if (provider) {
+        provider.on('sync', handleSync);
+        removeProviderSyncListener = () => provider.off('sync', handleSync);
+        if ((provider as unknown as { synced: boolean }).synced) {
+          handleSync(true);
+        }
+      } else {
+        if (yXmlFragment.length === 0 && initialContent) {
+          const pmDoc = parseMarkdown(initialContent);
+          if (pmDoc) {
+            prosemirrorToYXmlFragment(pmDoc, yXmlFragment);
+          }
+        }
+      }
+    } else {
+      plugins.unshift(
         history(),
-        createEditorKeymap(markdownSchema),
-        keymap(baseKeymap),
-        inputRules({ rules: buildInputRules(markdownSchema) }),
-      ],
-    });
+        keymap({
+          'Mod-z': prosemirrorUndo,
+          'Mod-Shift-z': prosemirrorRedo,
+          'Mod-y': prosemirrorRedo,
+        }),
+      );
+
+      state = EditorState.create({
+        doc: parseMarkdown(initialContent || ''),
+        schema: markdownSchema,
+        plugins,
+      });
+    }
+
+    let schedulePresenceUpdate = () => {};
+    let presenceBinding: { destroy: () => void; schedule: () => void } | undefined;
 
     const view = new EditorView(containerRef.current, {
       state,
-      dispatchTransaction(transaction) {
-        const newState = view.state.apply(transaction);
-        view.updateState(newState);
+      dispatchTransaction(this: EditorView, transaction) {
+        const newState = this.state.apply(transaction);
+        this.updateState(newState);
         setEditorState(newState);
+        schedulePresenceUpdate();
         if (transaction.docChanged && onChangeRef.current) {
           const markdown = serializeMarkdown(newState.doc);
           onChangeRef.current(markdown);
@@ -142,11 +254,27 @@ export function RichEditor({
       view.focus();
     }
 
+    if (provider) {
+      presenceBinding = bindPresenceOverlay({
+        view,
+        provider,
+        surface: editorSurfaceRef.current,
+        onPresenceChange: setPresenceItems,
+      });
+      schedulePresenceUpdate = presenceBinding.schedule;
+      schedulePresenceUpdate();
+    } else {
+      setPresenceItems([]);
+    }
+
     return () => {
+      presenceBinding?.destroy();
+      removeProviderSyncListener?.();
       view.destroy();
       viewRef.current = null;
+      setPresenceItems([]);
     };
-  }, []); // Only run once on mount
+  }, [autofocus, provider, ydoc]);
 
   const execCommand = useCallback(
     (command: (state: EditorState, dispatch: EditorView['dispatch']) => boolean) => {
@@ -306,8 +434,9 @@ export function RichEditor({
   );
 
   const toggleBulletList = useCallback(() => toggleList('bullet_list'), [toggleList]);
-
   const toggleOrderedList = useCallback(() => toggleList('ordered_list'), [toggleList]);
+
+  const { undo: undoCmd, redo: redoCmd } = getUndoRedoCommands(editorState);
 
   return (
     <div className={cn('flex flex-col h-full', className)}>
@@ -334,23 +463,283 @@ export function RichEditor({
         onCodeBlock={toggleCodeBlock}
         onBulletList={toggleBulletList}
         onOrderedList={toggleOrderedList}
-        onUndo={() => execCommand(undo)}
-        onRedo={() => execCommand(redo)}
+        onUndo={() => execCommand(undoCmd)}
+        onRedo={() => execCommand(redoCmd)}
       />
       <div
-        ref={containerRef}
-        className="flex flex-col flex-1 overflow-y-auto px-6 py-6 cursor-text [&>.ProseMirror]:flex-1"
+        ref={editorSurfaceRef}
+        className="relative flex flex-col flex-1 overflow-y-auto px-6 py-6 cursor-text [&_.ProseMirror]:flex-1"
         onClick={(e) => {
           if (e.target === e.currentTarget && viewRef.current) {
             viewRef.current.focus();
           }
         }}
-      />
+      >
+        <div ref={containerRef} className="contents" />
+        <PresenceOverlay items={presenceItems} />
+      </div>
     </div>
   );
 }
 
-import { wrappingInputRule, textblockTypeInputRule } from 'prosemirror-inputrules';
+function createPresenceAwarenessPlugin(provider: WebsocketProvider) {
+  return new Plugin({
+    view(view) {
+      const updateCursorInfo = () => {
+        const ystate = ySyncPluginKey.getState(view.state);
+        if (!ystate) return;
+
+        const current = provider.awareness.getLocalState() ?? {};
+        if (view.hasFocus()) {
+          const { selection } = view.state;
+          const anchor = absolutePositionToRelativePosition(
+            selection.anchor,
+            ystate.type,
+            ystate.binding.mapping,
+          );
+          const head = absolutePositionToRelativePosition(
+            selection.head,
+            ystate.type,
+            ystate.binding.mapping,
+          );
+
+          if (
+            current.cursor == null ||
+            !Y.compareRelativePositions(
+              Y.createRelativePositionFromJSON(current.cursor.anchor),
+              anchor,
+            ) ||
+            !Y.compareRelativePositions(Y.createRelativePositionFromJSON(current.cursor.head), head)
+          ) {
+            provider.awareness.setLocalStateField('cursor', { anchor, head });
+          }
+          return;
+        }
+
+        if (current.cursor != null) {
+          provider.awareness.setLocalStateField('cursor', null);
+        }
+      };
+
+      view.dom.addEventListener('focusin', updateCursorInfo);
+      view.dom.addEventListener('focusout', updateCursorInfo);
+      updateCursorInfo();
+
+      return {
+        update: updateCursorInfo,
+        destroy: () => {
+          view.dom.removeEventListener('focusin', updateCursorInfo);
+          view.dom.removeEventListener('focusout', updateCursorInfo);
+          provider.awareness.setLocalStateField('cursor', null);
+        },
+      };
+    },
+  });
+}
+
+function bindPresenceOverlay({
+  view,
+  provider,
+  surface,
+  onPresenceChange,
+}: {
+  view: EditorView;
+  provider: WebsocketProvider;
+  surface: HTMLDivElement | null;
+  onPresenceChange: (items: PresenceOverlayItem[]) => void;
+}) {
+  let frame = 0;
+
+  const renderPresence = () => {
+    if (!surface) {
+      onPresenceChange([]);
+      return;
+    }
+
+    const ystate = ySyncPluginKey.getState(view.state);
+    if (!ystate) {
+      onPresenceChange([]);
+      return;
+    }
+
+    const localUser = getAwarenessUser(provider.awareness.getLocalState());
+    const candidates = new Map<string, PresenceCandidate>();
+
+    for (const [clientId, state] of provider.awareness.getStates()) {
+      if (clientId === provider.doc.clientID) continue;
+
+      const user = getAwarenessUser(state);
+      const cursor = getAwarenessCursor(state);
+      if (!user || !cursor) continue;
+      if (user.tabId && localUser?.tabId === user.tabId) continue;
+
+      const anchor = relativePositionToAbsolutePosition(
+        ystate.doc,
+        ystate.type,
+        Y.createRelativePositionFromJSON(cursor.anchor),
+        ystate.binding.mapping,
+      );
+      const head = relativePositionToAbsolutePosition(
+        ystate.doc,
+        ystate.type,
+        Y.createRelativePositionFromJSON(cursor.head),
+        ystate.binding.mapping,
+      );
+      if (anchor === null || head === null) continue;
+
+      const key = user.tabId ?? String(clientId);
+      const lastUpdated = provider.awareness.meta.get(clientId)?.lastUpdated ?? 0;
+      const previous = candidates.get(key);
+      if (!previous || previous.lastUpdated <= lastUpdated) {
+        candidates.set(key, { anchor, clientId, head, lastUpdated, user });
+      }
+    }
+
+    const nextItems = Array.from(candidates.values()).map((candidate) =>
+      createPresenceOverlayItem({ ...candidate, surface, view }),
+    );
+    onPresenceChange(nextItems);
+  };
+
+  const schedule = () => {
+    if (frame) return;
+    frame = window.requestAnimationFrame(() => {
+      frame = 0;
+      renderPresence();
+    });
+  };
+
+  provider.awareness.on('change', schedule);
+  provider.awareness.on('update', schedule);
+  surface?.addEventListener('scroll', schedule, { passive: true });
+  window.addEventListener('resize', schedule);
+
+  return {
+    schedule,
+    destroy: () => {
+      if (frame) {
+        window.cancelAnimationFrame(frame);
+      }
+      provider.awareness.off('change', schedule);
+      provider.awareness.off('update', schedule);
+      surface?.removeEventListener('scroll', schedule);
+      window.removeEventListener('resize', schedule);
+      onPresenceChange([]);
+    },
+  };
+}
+
+function createPresenceOverlayItem({
+  clientId,
+  user,
+  anchor,
+  head,
+  surface,
+  view,
+}: {
+  clientId: number;
+  user: PresenceUser;
+  anchor: number;
+  head: number;
+  surface: HTMLDivElement;
+  view: EditorView;
+}): PresenceOverlayItem {
+  const caretRect = view.coordsAtPos(head);
+  const from = Math.min(anchor, head);
+  const to = Math.max(anchor, head);
+
+  return {
+    clientId,
+    user,
+    caret: {
+      left: Math.round(viewportXToSurfaceX(caretRect.left, surface)),
+      top: Math.round(viewportYToSurfaceY(caretRect.top, surface)),
+      height: Math.max(Math.round(caretRect.bottom - caretRect.top), 16),
+    },
+    selections: from === to ? [] : getSelectionRects(view, from, to, surface),
+  };
+}
+
+function getSelectionRects(view: EditorView, from: number, to: number, surface: HTMLDivElement) {
+  try {
+    const start = view.domAtPos(from);
+    const end = view.domAtPos(to);
+    const range = document.createRange();
+    range.setStart(start.node, start.offset);
+    range.setEnd(end.node, end.offset);
+
+    return Array.from(range.getClientRects())
+      .filter((rect) => rect.width > 0 && rect.height > 0)
+      .map((rect) => ({
+        left: Math.round(viewportXToSurfaceX(rect.left, surface)),
+        top: Math.round(viewportYToSurfaceY(rect.top, surface)),
+        width: Math.round(rect.width),
+        height: Math.round(rect.height),
+      }));
+  } catch {
+    return [];
+  }
+}
+
+function viewportXToSurfaceX(x: number, surface: HTMLDivElement) {
+  return x - surface.getBoundingClientRect().left + surface.scrollLeft;
+}
+
+function viewportYToSurfaceY(y: number, surface: HTMLDivElement) {
+  return y - surface.getBoundingClientRect().top + surface.scrollTop;
+}
+
+function getAwarenessUser(state: unknown): PresenceUser | null {
+  const user = (state as { user?: Partial<PresenceUser> } | null)?.user;
+  if (!user?.name || !user?.color) return null;
+  return {
+    color: user.color,
+    name: user.name,
+    tabId: user.tabId,
+  };
+}
+
+function getAwarenessCursor(state: unknown) {
+  return (state as { cursor?: { anchor: unknown; head: unknown } } | null)?.cursor ?? null;
+}
+
+function PresenceOverlay({ items }: { items: PresenceOverlayItem[] }) {
+  return (
+    <div className="seneschal-collab-overlay" aria-hidden="true">
+      {items.map((item) => {
+        const style = { '--collab-color': item.user.color } as CSSProperties;
+        return (
+          <div key={item.clientId} className="seneschal-collab-presence" style={style}>
+            {item.selections.map((selection, index) => (
+              <span
+                key={`${item.clientId}-selection-${index}`}
+                className="seneschal-collab-selection"
+                style={{
+                  height: selection.height,
+                  transform: `translate(${selection.left}px, ${selection.top}px)`,
+                  width: selection.width,
+                }}
+              />
+            ))}
+            <span
+              className="seneschal-collab-cursor"
+              style={{
+                height: item.caret.height,
+                transform: `translate(${item.caret.left}px, ${item.caret.top}px)`,
+              }}
+            >
+              <span className="seneschal-collab-caret" />
+              <span className="seneschal-collab-label">
+                <span className="seneschal-collab-label-chip" />
+                <span className="seneschal-collab-label-name">{item.user.name}</span>
+              </span>
+            </span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
 
 function buildInputRules(schema: Schema) {
   return [
