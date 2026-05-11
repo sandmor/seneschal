@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { QueryClient, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from '@tanstack/react-router';
+import type * as Y from 'yjs';
+import type { WebsocketProvider } from 'y-websocket';
 import { AppShell } from '@/components/app-shell';
 import { InspectorPanel } from '@/components/inspector-panel';
 import { Sidebar } from '@/components/sidebar';
@@ -35,6 +37,9 @@ import {
   joinPath,
   stripMarkdownExtension,
 } from '@/features/document-browser/path-utils';
+import { createYjsProvider } from '@/features/editor/yjs-provider';
+import { getStoredAuthToken } from '@/features/auth/auth-api';
+import { resolveBaseUrl } from '@/lib/orval-client';
 import { cn } from '@/lib/utils';
 
 export type ExplorerShellProps = {
@@ -69,6 +74,11 @@ export function ExplorerShell({ directoryPath, documentPath }: ExplorerShellProp
   const [editorKey, setEditorKey] = useState(0);
   const hasUnsavedChangesRef = useRef(false);
 
+  // Yjs collaborative state
+  const [ydoc, setYdoc] = useState<Y.Doc | undefined>(undefined);
+  const [provider, setProvider] = useState<WebsocketProvider | undefined>(undefined);
+  const yjsCleanupRef = useRef<(() => void) | null>(null);
+
   const directoryQuery = useQuery({
     queryKey: directoryQueryKey(directoryPath),
     queryFn: () => getDirectory(directoryPath),
@@ -95,6 +105,42 @@ export function ExplorerShell({ directoryPath, documentPath }: ExplorerShellProp
   }, [currentDirectory]);
 
   const syncedEditorKeyRef = useRef(-1);
+
+  // Manage Yjs connection lifecycle per document
+  useEffect(() => {
+    // Clean up previous Yjs connection
+    if (yjsCleanupRef.current) {
+      yjsCleanupRef.current();
+      yjsCleanupRef.current = null;
+    }
+
+    if (!documentPath) {
+      setYdoc(undefined);
+      setProvider(undefined);
+      return;
+    }
+
+    const { ydoc: newYdoc, provider: newProvider } = createYjsProvider({
+      documentPath,
+      token: getStoredAuthToken() ?? undefined,
+      apiUrl: resolveBaseUrl(),
+    });
+
+    setYdoc(newYdoc);
+    setProvider(newProvider);
+
+    yjsCleanupRef.current = () => {
+      newProvider.destroy();
+      newYdoc.destroy();
+    };
+
+    return () => {
+      if (yjsCleanupRef.current) {
+        yjsCleanupRef.current();
+        yjsCleanupRef.current = null;
+      }
+    };
+  }, [documentPath]);
 
   // Update document state when document is selected
   useEffect(() => {
@@ -441,6 +487,8 @@ export function ExplorerShell({ directoryPath, documentPath }: ExplorerShellProp
           onDocumentContentChange={handleDocumentContentChange}
           onDelete={handleDeleteDocument}
           onKeyDown={(e) => e.key === 'Enter' && e.currentTarget.blur()}
+          ydoc={ydoc}
+          provider={provider}
         />
       </AppShell>
     );
