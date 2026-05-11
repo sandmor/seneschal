@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/naming-convention */
 // 🔥 MOCK API (temporal mientras backend no está listo)
 
 export type ExplorerDocument = {
@@ -33,7 +34,7 @@ export type ExplorerNode =
 export const directoryQueryKey = (path: string) => ['directory', path] as const;
 export const documentQueryKey = (path: string) => ['document', path] as const;
 
-// 🧠 Estado en memoria (simula una base de datos temporal)
+// 🧠 Estado en memoria
 const mockStore = {
   directories: new Map<string, { name: string; children: string[] }>([
     ['/', { name: 'Root', children: ['/projects', '/doc1.md', '/notes.md'] }],
@@ -46,7 +47,6 @@ const mockStore = {
   ]),
 };
 
-// 📁 Directory
 export async function getDirectory(path: string): Promise<ExplorerDirectory> {
   const dir = mockStore.directories.get(path);
   const childPaths = dir?.children ?? [];
@@ -59,7 +59,7 @@ export async function getDirectory(path: string): Promise<ExplorerDirectory> {
       const grandchildDirs = childDir.children.filter((c) => mockStore.directories.has(c));
       const grandchildDocs = childDir.children.filter((c) => mockStore.documents.has(c));
       return {
-        kind: 'directory',
+        kind: 'directory' as const,
         name,
         path: childPath,
         child_directories_count: grandchildDirs.length,
@@ -67,7 +67,7 @@ export async function getDirectory(path: string): Promise<ExplorerDirectory> {
       };
     }
     return {
-      kind: 'document',
+      kind: 'document' as const,
       name,
       path: childPath,
       size_bytes: (mockStore.documents.get(childPath) ?? '').length,
@@ -88,9 +88,9 @@ export async function getDirectory(path: string): Promise<ExplorerDirectory> {
 
 export async function createDirectory(path: string): Promise<ExplorerDirectory> {
   const name = path.split('/').filter(Boolean).at(-1) ?? '';
-  const parent_path = path.split('/').slice(0, -1).join('/') || '/';
+  const parentPath = path.split('/').slice(0, -1).join('/') || '/';
   mockStore.directories.set(path, { name, children: [] });
-  const parent = mockStore.directories.get(parent_path);
+  const parent = mockStore.directories.get(parentPath);
   if (parent && !parent.children.includes(path)) {
     parent.children.push(path);
   }
@@ -102,8 +102,8 @@ export async function updateDirectory(path: string, newPath: string): Promise<Ex
   const name = newPath.split('/').filter(Boolean).at(-1) ?? '';
   mockStore.directories.set(newPath, { name, children: dir?.children ?? [] });
   mockStore.directories.delete(path);
-  const parent_path = path.split('/').slice(0, -1).join('/') || '/';
-  const parent = mockStore.directories.get(parent_path);
+  const parentPath = path.split('/').slice(0, -1).join('/') || '/';
+  const parent = mockStore.directories.get(parentPath);
   if (parent) {
     parent.children = parent.children.map((c) => (c === path ? newPath : c));
   }
@@ -116,14 +116,14 @@ export async function updateDirectory(path: string, newPath: string): Promise<Ex
   };
 }
 
-export async function deleteDirectory(path: string, _recursive: boolean): Promise<void> {
+export async function deleteDirectory(path: string, recursive: boolean): Promise<void> {
+  void recursive;
   mockStore.directories.delete(path);
   for (const [, dir] of mockStore.directories) {
     dir.children = dir.children.filter((c) => c !== path);
   }
 }
 
-// 📄 Document
 export async function getDocument(path: string): Promise<ExplorerDocument> {
   const name = path.split('/').filter(Boolean).at(-1) ?? 'document.md';
   const parent_path = path.split('/').slice(0, -1).join('/') || '/';
@@ -172,7 +172,6 @@ export async function deleteDocument(path: string): Promise<void> {
   }
 }
 
-// ❌ Errores simulados simples
 export function getApiErrorMessage(error: unknown): string {
   if (error instanceof Error) return error.message;
   return 'An unexpected error occurred.';

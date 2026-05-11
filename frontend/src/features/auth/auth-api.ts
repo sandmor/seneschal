@@ -1,31 +1,30 @@
 // 🔥 MOCK API — Auth
 
 export type LoginResponse = {
-  access_token: string;
-  token_type: string;
+  accessToken: string;
+  tokenType: string;
 };
 
 export type AdminProfileResponse = {
   id: string;
   username: string;
   email: string;
-  is_admin: boolean;
+  isAdmin: boolean;
 };
 
 export type UserResponse = {
   id: string;
   username: string;
   email: string;
-  is_admin: boolean;
+  isAdmin: boolean;
 };
 
 const TOKEN_KEY = 'seneschal.auth.token';
 
-// 🧠 Mock users
 const mockUsers: UserResponse[] = [
-  { id: 'user_1', username: 'santiago', email: 'santiago@example.com', is_admin: true },
-  { id: 'user_2', username: 'ana', email: 'ana@example.com', is_admin: false },
-  { id: 'user_3', username: 'carlos', email: 'carlos@example.com', is_admin: false },
+  { id: 'user_1', username: 'santiago', email: 'santiago@example.com', isAdmin: true },
+  { id: 'user_2', username: 'ana', email: 'ana@example.com', isAdmin: false },
+  { id: 'user_3', username: 'carlos', email: 'carlos@example.com', isAdmin: false },
 ];
 
 const mockProfiles: Record<string, AdminProfileResponse> = {
@@ -33,9 +32,9 @@ const mockProfiles: Record<string, AdminProfileResponse> = {
     id: 'user_1',
     username: 'santiago',
     email: 'santiago@example.com',
-    is_admin: true,
+    isAdmin: true,
   },
-  'mock-token-ana': { id: 'user_2', username: 'ana', email: 'ana@example.com', is_admin: false },
+  'mock-token-ana': { id: 'user_2', username: 'ana', email: 'ana@example.com', isAdmin: false },
 };
 
 export function getStoredAuthToken() {
@@ -52,15 +51,16 @@ export function storeAuthToken(token: string | null) {
   window.localStorage.removeItem(TOKEN_KEY);
 }
 
-export async function login(username: string, _password: string): Promise<LoginResponse> {
+export async function login(username: string, password: string): Promise<LoginResponse> {
+  void password;
   const user = mockUsers.find((u) => u.username === username);
   if (!user) throw new Error('Invalid username or password');
-  const token = `mock-token-${username}`;
-  return { access_token: token, token_type: 'bearer' };
+  const accessToken = `mock-token-${username}`;
+  return { accessToken, tokenType: 'bearer' };
 }
 
-export async function logout(_token: string): Promise<void> {
-  // noop en mock
+export async function logout(token: string): Promise<void> {
+  void token;
 }
 
 export async function getProfile(token: string): Promise<AdminProfileResponse> {
@@ -69,6 +69,7 @@ export async function getProfile(token: string): Promise<AdminProfileResponse> {
   return profile;
 }
 
-export async function listUsers(_token: string): Promise<UserResponse[]> {
+export async function listUsers(token: string): Promise<UserResponse[]> {
+  void token;
   return mockUsers;
 }
