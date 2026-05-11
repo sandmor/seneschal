@@ -4,8 +4,6 @@ from typing import Annotated
 
 from fastapi import APIRouter, HTTPException, Header, Query, Response, status
 
-from src.application.pdf_service import generate_pdf
-
 from src.application.auth_service import AuthService
 from src.application.document_management_service import DocumentManagementService
 from src.application.token_store import TokenStore
@@ -157,16 +155,5 @@ def create_api_router(
     async def delete_document(path: str = Query(...)) -> Response:
         service.delete_document(path)
         return Response(status_code=status.HTTP_204_NO_CONTENT)
-
-    @router.get("/api/documents/export-pdf", tags=["documents"])
-    async def export_document_pdf(path: str = Query(...)) -> Response:
-        detail = service.get_document(path)
-        title = detail.document.path.name
-        pdf_bytes = generate_pdf(detail.content, title=title)
-        return Response(
-            content=pdf_bytes,
-            media_type="application/pdf",
-            headers={"Content-Disposition": f"attachment; filename={title}.pdf"},
-        )
 
     return router
