@@ -13,8 +13,13 @@ export default defineConfig(({ mode }) => {
 
   return {
     envDir,
-    define: {
-      PUBLIC_API_URL: JSON.stringify(env.VITE_PUBLIC_API_URL || ''),
+    server: {
+      proxy: {
+        '/api': {
+          target: env.VITE_PUBLIC_API_URL || 'http://127.0.0.1:8000',
+          changeOrigin: true,
+        },
+      },
     },
     plugins: [tanstackRouter(), tailwindcss(), react()],
     resolve: {

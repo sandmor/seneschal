@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { createMemoryHistory } from '@tanstack/react-router';
+import { createProxyMiddleware } from 'http-proxy-middleware';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 config({ path: path.resolve(__dirname, '../.env') });
@@ -17,6 +18,15 @@ app.use(express.static(path.resolve(__dirname, './dist/client'), { index: false 
 app.get('/health', (_req: Request, res: Response) => {
   res.status(200).json({ status: 'ok' });
 });
+
+const internalApiUrl = process.env.INTERNAL_API_URL || 'http://127.0.0.1:8000';
+app.use(
+  createProxyMiddleware({
+    target: internalApiUrl,
+    changeOrigin: true,
+    pathFilter: '/api',
+  }),
+);
 
 app.use(async (req: Request, res: Response, next: NextFunction) => {
   try {

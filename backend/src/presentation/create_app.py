@@ -9,6 +9,7 @@ from dotenv import load_dotenv
 from fastapi import FastAPI, Request, WebSocket, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+import logging
 
 from src.adapters.in_memory_token_store import InMemoryTokenStore
 from src.adapters.local_storage import LocalStorageAdapter
@@ -51,6 +52,16 @@ def create_app() -> FastAPI:
         lifespan=lifespan,
     )
 
+    logger = logging.getLogger("seneschal")
+    logger.setLevel(logging.INFO)
+
+    handler = logging.StreamHandler()
+    formatter = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
+    handler.setFormatter(formatter)
+    logger.addHandler(handler)
+
+    app.logger = logger
+
     app.add_middleware(
         CORSMiddleware,
         allow_origins=_build_allowed_origins(),
@@ -60,6 +71,12 @@ def create_app() -> FastAPI:
     )
 
     app.include_router(create_api_router(service, auth_service, user_service, token_store))
+
+    @app.middleware("http")
+    async def log_request_url(request: Request, call_next):
+        app.logger.info(f"Incoming request URL: {request.url}")
+        response = await call_next(request)
+        return response
 
     @app.websocket("/ws/documents/{path:path}")
     async def document_websocket(websocket: WebSocket, path: str) -> None:

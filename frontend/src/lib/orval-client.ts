@@ -10,17 +10,12 @@ export class ApiError extends Error {
   }
 }
 
-function resolveBrowserBaseUrl() {
-  if (typeof window === 'undefined') {
-    return undefined;
+export function resolveBaseUrl() {
+  if (typeof window !== 'undefined') {
+    return window.location.origin + '/api';
   }
 
-  return PUBLIC_API_URL || undefined;
-}
-
-export function resolveBaseUrl() {
   return (
-    resolveBrowserBaseUrl() ??
     process.env.INTERNAL_API_URL ??
     process.env.VITE_PUBLIC_API_URL ??
     process.env.OPENAPI_URL?.replace(/\/openapi\.json$/, '') ??
