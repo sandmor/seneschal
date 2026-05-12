@@ -18,3 +18,10 @@ line-length = 100
 [tool.ruff.lint]
 select = ["E", "F", "N"]
 ignore = ["E501"]
+
+[project.dependencies]
+dependencies = [
+    "markdown>=3.6",
+    "weasyprint>=62.0",
+    "pygments>=2.18",   # para codehilite (syntax highlighting)
+]
