@@ -1,68 +1,29 @@
-// 🔥 MOCK API — Auth (independiente de orval)
+import { customInstance, ApiError } from '@/lib/orval-client';
 
-// Tipos que imitan lo que el backend real retorna
+export { ApiError };
+
 export type LoginResponse = {
   token: string;
 };
 
 export type AdminProfileResponse = {
-  id: string;
+  id: number;
   name: string;
-  username: string;
-  email: string;
   role: string;
   roles: string[];
-  isAdmin: boolean;
 };
 
 export type UserResponse = {
   id: number;
   name: string;
-  username: string;
-  email: string;
   roles: string[];
 };
 
 const TOKEN_KEY = 'seneschal.auth.token';
 
-const mockUsers: UserResponse[] = [
-  {
-    id: 1,
-    name: 'Santiago Morales',
-    username: 'santiago',
-    email: 'santiago@example.com',
-    roles: ['Admin'],
-  },
-  { id: 2, name: 'Ana García', username: 'ana', email: 'ana@example.com', roles: ['Editor'] },
-  {
-    id: 3,
-    name: 'Carlos López',
-    username: 'carlos',
-    email: 'carlos@example.com',
-    roles: ['Viewer'],
-  },
-];
-
-const mockProfiles: Record<string, AdminProfileResponse> = {
-  'mock-token-santiago': {
-    id: 'user_1',
-    name: 'Santiago Morales',
-    username: 'santiago',
-    email: 'santiago@example.com',
-    role: 'Admin',
-    roles: ['Admin'],
-    isAdmin: true,
-  },
-  'mock-token-ana': {
-    id: 'user_2',
-    name: 'Ana García',
-    username: 'ana',
-    email: 'ana@example.com',
-    role: 'Editor',
-    roles: ['Editor'],
-    isAdmin: false,
-  },
-};
+function authHeaders(token: string) {
+  return { Authorization: `Bearer ${token}` };
+}
 
 export function getStoredAuthToken() {
   if (typeof window === 'undefined') return null;
@@ -79,23 +40,31 @@ export function storeAuthToken(token: string | null) {
 }
 
 export async function login(username: string, password: string): Promise<LoginResponse> {
-  void password;
-  const user = mockUsers.find((u) => u.username === username);
-  if (!user) throw new Error('Invalid username or password');
-  return { token: `mock-token-${username}` };
+  const res = await customInstance<{ data: LoginResponse }>('/api/auth/login', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ username, password }),
+  });
+  return res.data;
 }
 
 export async function logout(token: string): Promise<void> {
-  void token;
+  await customInstance<void>('/api/auth/logout', {
+    method: 'POST',
+    headers: authHeaders(token),
+  });
 }
 
 export async function getProfile(token: string): Promise<AdminProfileResponse> {
-  const profile = mockProfiles[token];
-  if (!profile) throw new Error('Invalid token');
-  return profile;
+  const res = await customInstance<{ data: AdminProfileResponse }>('/api/auth/me', {
+    headers: authHeaders(token),
+  });
+  return res.data;
 }
 
 export async function listUsers(token: string): Promise<UserResponse[]> {
-  void token;
-  return mockUsers;
+  const res = await customInstance<{ data: UserResponse[] }>('/api/users', {
+    headers: authHeaders(token),
+  });
+  return res.data;
 }

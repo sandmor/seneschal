@@ -5,6 +5,7 @@ import type { AdminProfileResponse } from '@/features/auth/auth-api';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
+import { cn } from '@/lib/utils';
 import {
   getProfile,
   getStoredAuthToken,
@@ -59,11 +60,10 @@ export function AuthPage() {
   const loginMutation = useMutation({
     mutationFn: ({ nextUsername, nextPassword }: { nextUsername: string; nextPassword: string }) =>
       login(nextUsername, nextPassword),
-    onSuccess: ({ token: nextToken }) => {
+    onSuccess: ({ token: nextToken }: { token: string }) => {
       storeAuthToken(nextToken);
       setToken(nextToken);
       setPassword('');
-      setNotice('Signed in.');
       void navigate({ to: '/', search: { path: '/', document: undefined } });
     },
   });
@@ -135,8 +135,6 @@ export function AuthPage() {
   );
 }
 
-// ─── Login View ───────────────────────────────────────────────────────────────
-
 function LoginView({
   username,
   password,
@@ -158,33 +156,18 @@ function LoginView({
 }) {
   return (
     <div className="relative flex min-h-screen w-full overflow-hidden bg-background">
-      {/* Left decorative panel */}
       <div className="relative hidden w-[45%] flex-col justify-between overflow-hidden bg-foreground p-12 lg:flex">
-        {/* Geometric background */}
         <div className="absolute inset-0">
           <div className="absolute top-0 left-0 h-64 w-64 rounded-full bg-primary/20 blur-3xl" />
           <div className="absolute bottom-0 right-0 h-96 w-96 rounded-full bg-primary/10 blur-3xl" />
           <div
             className="absolute inset-0 opacity-5"
             style={{
-              backgroundImage: `repeating-linear-gradient(
-                0deg,
-                transparent,
-                transparent 40px,
-                oklch(0.9 0.01 75) 40px,
-                oklch(0.9 0.01 75) 41px
-              ), repeating-linear-gradient(
-                90deg,
-                transparent,
-                transparent 40px,
-                oklch(0.9 0.01 75) 40px,
-                oklch(0.9 0.01 75) 41px
-              )`,
+              backgroundImage: `repeating-linear-gradient(0deg, transparent, transparent 40px, oklch(0.9 0.01 75) 40px, oklch(0.9 0.01 75) 41px), repeating-linear-gradient(90deg, transparent, transparent 40px, oklch(0.9 0.01 75) 40px, oklch(0.9 0.01 75) 41px)`,
             }}
           />
         </div>
 
-        {/* Logo */}
         <div className="relative z-10">
           <div className="flex items-center gap-3">
             <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary">
@@ -194,7 +177,6 @@ function LoginView({
           </div>
         </div>
 
-        {/* Center content */}
         <div className="relative z-10 space-y-6">
           <div className="space-y-1">
             <p className="text-[10px] font-semibold uppercase tracking-[0.3em] text-primary">
@@ -209,8 +191,6 @@ function LoginView({
           <p className="max-w-xs text-sm leading-6 text-background/50">
             Role-based access control for your documents. Sign in to access your workspace.
           </p>
-
-          {/* Feature list */}
           <div className="space-y-3 pt-4">
             {['Role-based permissions', 'Document version control', 'Real-time collaboration'].map(
               (feature) => (
@@ -225,15 +205,12 @@ function LoginView({
           </div>
         </div>
 
-        {/* Bottom */}
         <div className="relative z-10">
           <p className="text-xs text-background/30">© 2026 Seneschal. All rights reserved.</p>
         </div>
       </div>
 
-      {/* Right — form panel */}
       <div className="flex flex-1 flex-col items-center justify-center px-6 py-12">
-        {/* Mobile logo */}
         <div className="mb-10 flex items-center gap-3 lg:hidden">
           <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary">
             <ShieldIcon className="h-4 w-4 text-primary-foreground" />
@@ -242,14 +219,12 @@ function LoginView({
         </div>
 
         <div className="w-full max-w-sm space-y-8">
-          {/* Heading */}
           <div className="space-y-1.5">
             <h1 className="font-heading text-2xl font-semibold text-foreground">Welcome back</h1>
             <p className="sr-only">Authentication</p>
             <p className="text-sm text-muted-foreground">Sign in to your workspace</p>
           </div>
 
-          {/* Form */}
           <form onSubmit={onSubmit} className="space-y-4">
             <div className="space-y-2">
               <label className="text-xs font-medium text-muted-foreground" htmlFor="username">
@@ -283,7 +258,12 @@ function LoginView({
             </div>
 
             {notice && (
-              <div className="rounded-lg border border-destructive/30 bg-destructive/8 px-3 py-2 text-sm text-destructive">
+              <div
+                className={cn(
+                  'rounded-lg border px-3 py-2 text-sm',
+                  'border-destructive/30 bg-destructive/8 text-destructive',
+                )}
+              >
                 {notice}
               </div>
             )}
@@ -300,7 +280,6 @@ function LoginView({
             </Button>
           </form>
 
-          {/* Hint */}
           <p className="text-center text-xs text-muted-foreground">
             Access is managed by your administrator.
             <br />
@@ -311,8 +290,6 @@ function LoginView({
     </div>
   );
 }
-
-// ─── Session View ─────────────────────────────────────────────────────────────
 
 function SessionView({
   profile,
@@ -332,7 +309,6 @@ function SessionView({
   return (
     <div className="flex min-h-screen w-full flex-col items-center justify-center bg-background px-4 py-12">
       <div className="w-full max-w-2xl space-y-6">
-        {/* Header */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary">
@@ -345,7 +321,6 @@ function SessionView({
           </Button>
         </div>
 
-        {/* Profile card */}
         <div className="rounded-xl border border-border bg-card p-6 shadow-sm">
           <div className="flex items-start gap-4">
             <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-primary/10 text-lg font-semibold text-primary">
@@ -354,7 +329,6 @@ function SessionView({
             <div className="min-w-0">
               <p className="text-xs text-muted-foreground">Signed in as</p>
               <h2 className="mt-0.5 text-xl font-semibold text-foreground">{profile.name}</h2>
-              <p className="mt-0.5 text-sm text-muted-foreground">{profile.email}</p>
               <div className="mt-3 flex flex-wrap gap-1.5">
                 <Badge>{profile.role}</Badge>
                 {profile.roles
@@ -375,7 +349,6 @@ function SessionView({
           </div>
         )}
 
-        {/* Users list */}
         <div className="rounded-xl border border-border bg-card p-6 shadow-sm">
           <div className="mb-4 flex items-center justify-between">
             <div>
@@ -421,8 +394,6 @@ function SessionView({
     </div>
   );
 }
-
-// ─── Icons ────────────────────────────────────────────────────────────────────
 
 const ShieldIcon = ({ className }: { className?: string }) => (
   <svg
