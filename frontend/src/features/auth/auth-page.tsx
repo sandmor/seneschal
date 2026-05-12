@@ -212,18 +212,16 @@ function LoginView({
 
           {/* Feature list */}
           <div className="space-y-3 pt-4">
-            {[
-              'Role-based permissions',
-              'Document version control',
-              'Real-time collaboration',
-            ].map((feature) => (
-              <div key={feature} className="flex items-center gap-3">
-                <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary/20">
-                  <CheckIcon className="h-3 w-3 text-primary" />
+            {['Role-based permissions', 'Document version control', 'Real-time collaboration'].map(
+              (feature) => (
+                <div key={feature} className="flex items-center gap-3">
+                  <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary/20">
+                    <CheckIcon className="h-3 w-3 text-primary" />
+                  </div>
+                  <span className="text-sm text-background/60">{feature}</span>
                 </div>
-                <span className="text-sm text-background/60">{feature}</span>
-              </div>
-            ))}
+              ),
+            )}
           </div>
         </div>
 
@@ -289,12 +287,7 @@ function LoginView({
               </div>
             )}
 
-            <Button
-              type="submit"
-              size="lg"
-              disabled={!isHydrated || isBusy}
-              className="w-full"
-            >
+            <Button type="submit" size="lg" disabled={!isHydrated || isBusy} className="w-full">
               {isBusy ? (
                 <span className="flex items-center gap-2">
                   <SpinnerIcon className="h-4 w-4 animate-spin" />
@@ -363,9 +356,13 @@ function SessionView({
               <p className="mt-0.5 text-sm text-muted-foreground">{profile.email}</p>
               <div className="mt-3 flex flex-wrap gap-1.5">
                 <Badge>{profile.role}</Badge>
-                {profile.roles.filter((r) => r !== profile.role).map((role) => (
-                  <Badge key={role} variant="outline">{role}</Badge>
-                ))}
+                {profile.roles
+                  .filter((r) => r !== profile.role)
+                  .map((role) => (
+                    <Badge key={role} variant="outline">
+                      {role}
+                    </Badge>
+                  ))}
               </div>
             </div>
           </div>
@@ -384,9 +381,7 @@ function SessionView({
               <p className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
                 Users
               </p>
-              <h3 className="mt-1 text-base font-semibold text-foreground">
-                Available accounts
-              </h3>
+              <h3 className="mt-1 text-base font-semibold text-foreground">Available accounts</h3>
             </div>
             <Badge variant="secondary">{users.length} loaded</Badge>
           </div>
@@ -429,13 +424,25 @@ function SessionView({
 // ─── Icons ────────────────────────────────────────────────────────────────────
 
 const ShieldIcon = ({ className }: { className?: string }) => (
-  <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="1.8">
+  <svg
+    viewBox="0 0 24 24"
+    className={className}
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="1.8"
+  >
     <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
   </svg>
 );
 
 const CheckIcon = ({ className }: { className?: string }) => (
-  <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="2.5">
+  <svg
+    viewBox="0 0 24 24"
+    className={className}
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2.5"
+  >
     <path d="M20 6 9 17l-5-5" />
   </svg>
 );
