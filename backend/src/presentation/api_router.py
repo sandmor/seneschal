@@ -156,4 +156,22 @@ def create_api_router(
         service.delete_document(path)
         return Response(status_code=status.HTTP_204_NO_CONTENT)
 
+    @router.get("/api/search", response_model=list[DocumentResponse], tags=["documents"])
+    async def search_documents(q: str = Query(..., min_length=1)) -> list[DocumentResponse]:
+        return [serialize_document(doc) for doc in service.search_documents(q)]
+
+    @router.post("/api/directories/copy", response_model=DirectoryResponse, tags=["directories"])
+    async def copy_directory(
+        path: str = Query(...),
+        destination: str = Query(...),
+    ) -> DirectoryResponse:
+        return serialize_directory(service.copy_directory(path, destination))
+
+    @router.post("/api/documents/copy", response_model=DocumentResponse, tags=["documents"])
+    async def copy_document(
+        path: str = Query(...),
+        destination: str = Query(...),
+    ) -> DocumentResponse:
+        return serialize_document(service.copy_document(path, destination))
+
     return router

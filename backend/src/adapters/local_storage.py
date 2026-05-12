@@ -3,6 +3,8 @@ from __future__ import annotations
 import shutil
 from pathlib import Path
 
+from datetime import datetime, timezone
+
 from src.domain.domain_errors import (
     DirectoryNotEmptyError,
     ResourceAlreadyExistsError,
@@ -104,6 +106,36 @@ class LocalStorageAdapter:
         source_fs_path.rename(destination_fs_path)
         return self.read_document(destination_path)
 
+    def copy_document(
+        self, source_path: AbsolutePath, destination_path: AbsolutePath
+    ) -> DocumentDetail:
+        source_fs_path = self._require_existing_document(source_path)
+        destination_fs_path = self._fs_path_for(destination_path)
+
+        if destination_fs_path.exists():
+            raise ResourceAlreadyExistsError(
+                f"Destination document '{destination_path.value}' already exists."
+            )
+
+        self._require_existing_directory(destination_path.parent)
+        shutil.copy2(source_fs_path, destination_fs_path)
+        return self.read_document(destination_path)
+
+    def copy_directory(
+        self, source_path: AbsolutePath, destination_path: AbsolutePath
+    ) -> DirectoryDetail:
+        source_fs_path = self._require_existing_directory(source_path)
+        destination_fs_path = self._fs_path_for(destination_path)
+
+        if destination_fs_path.exists():
+            raise ResourceAlreadyExistsError(
+                f"Destination directory '{destination_path.value}' already exists."
+            )
+
+        self._require_existing_directory(destination_path.parent)
+        shutil.copytree(source_fs_path, destination_fs_path)
+        return self.read_directory(destination_path)
+
     def delete_directory(self, path: AbsolutePath, recursive: bool) -> None:
         fs_path = self._require_existing_directory(path)
 
@@ -121,6 +153,16 @@ class LocalStorageAdapter:
     def delete_document(self, path: AbsolutePath) -> None:
         fs_path = self._require_existing_document(path)
         fs_path.unlink()
+
+    def search_documents(self, query: str) -> list[DocumentDetail]:
+        results = []
+        query_lower = query.casefold()
+        for fs_path in self._base_directory.rglob("*.md"):
+            if query_lower in fs_path.name.casefold():
+                segments = fs_path.relative_to(self._base_directory).parts
+                path = AbsolutePath(segments)
+                results.append(self.read_document(path))
+        return sorted(results, key=lambda d: d.document.path.value)
 
     def _fs_path_for(self, path: AbsolutePath) -> Path:
         return self._base_directory.joinpath(*path.segments)
@@ -151,14 +193,25 @@ class LocalStorageAdapter:
             else:
                 child_documents_count += 1
 
+        stat = directory_path.stat()
+
         return DirectoryEntry(
             path=path,
             child_directories_count=child_directories_count,
             child_documents_count=child_documents_count,
+            created_at=datetime.fromtimestamp(stat.st_ctime, tz=timezone.utc),
+            updated_at=datetime.fromtimestamp(stat.st_mtime, tz=timezone.utc),
         )
 
     def _build_document_entry(self, path: AbsolutePath, document_path: Path) -> DocumentEntry:
-        return DocumentEntry(path=path, size_bytes=document_path.stat().st_size)
+        stat = document_path.stat()
+
+        return DocumentEntry(
+            path=path,
+            size_bytes=stat.st_size,
+            created_at=datetime.fromtimestamp(stat.st_ctime, tz=timezone.utc),
+            updated_at=datetime.fromtimestamp(stat.st_mtime, tz=timezone.utc),
+        )
 
     def _iter_supported_children(self, path: AbsolutePath, directory_path: Path) -> list[Path]:
         children: list[Path] = []
