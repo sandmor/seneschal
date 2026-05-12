@@ -5,6 +5,8 @@ __pycache__/
 .pytest_cache/
 .ruff_cache/
 .mypy_cache/
+backend.egg-info/
+*.egg-info/
 
 node_modules/
 frontend/node_modules/
