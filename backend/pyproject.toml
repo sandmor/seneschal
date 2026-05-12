@@ -11,4 +11,13 @@ dependencies = [
     "pycrdt-websocket>=0.16.1",
     "websockets>=15.0.1",
     "pyjwt>=2.10.1",
+    "reportlab>=4.5.0",
+    "markdown>=3.6",
+    "playwright>=1.43.0",
+    "pygments>=2.18",
+]
+
+[dependency-groups]
+dev = [
+    "ruff>=0.15.11",
 ]
