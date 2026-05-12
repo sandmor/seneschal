@@ -1,7 +1,14 @@
-import { createFileRoute } from '@tanstack/react-router';
+import { createFileRoute, redirect } from '@tanstack/react-router';
 import { ExplorerShell } from '@/features/document-browser/explorer-shell';
+import { getStoredAuthToken } from '@/features/auth/auth-api';
 
 export const Route = createFileRoute('/')({
+  beforeLoad: () => {
+    const token = getStoredAuthToken();
+    if (!token) {
+      throw redirect({ to: '/auth' });
+    }
+  },
   validateSearch: (search: Record<string, unknown>) => ({
     document:
       typeof search.document === 'string' && search.document.startsWith('/')
@@ -11,7 +18,6 @@ export const Route = createFileRoute('/')({
   }),
   component: () => {
     const search = Route.useSearch();
-
     return <ExplorerShell directoryPath={search.path} documentPath={search.document} />;
   },
 });
