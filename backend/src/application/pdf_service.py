@@ -3,21 +3,38 @@ from __future__ import annotations
 import io
 import re
 
-import markdown
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.lib.units import cm
 from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer
 
 
-def _strip_html(text: str) -> str:
-    return re.sub(r"<[^>]+>", "", text)
+def _parse_markdown_lines(content: str) -> list[tuple[str, str]]:
+    """Parse markdown lines into (style, text) tuples."""
+    result = []
+    for line in content.splitlines():
+        stripped = line.strip()
+        if not stripped:
+            result.append(("spacer", ""))
+        elif stripped.startswith("### "):
+            result.append(("Heading3", stripped[4:]))
+        elif stripped.startswith("## "):
+            result.append(("Heading2", stripped[3:]))
+        elif stripped.startswith("# "):
+            result.append(("Heading1", stripped[2:]))
+        elif stripped.startswith("- ") or stripped.startswith("* "):
+            result.append(("Normal", f"• {stripped[2:]}"))
+        elif re.match(r"^\d+\. ", stripped):
+            result.append(("Normal", re.sub(r"^\d+\. ", "", stripped)))
+        else:
+            text = re.sub(r"\*\*(.*?)\*\*", r"\1", stripped)
+            text = re.sub(r"\*(.*?)\*", r"\1", text)
+            text = re.sub(r"`(.*?)`", r"\1", text)
+            result.append(("Normal", text))
+    return result
 
 
 def generate_pdf(content: str, title: str = "Document") -> bytes:
-    html_body = markdown.markdown(content, extensions=["tables", "fenced_code"])
-    lines = html_body.split("\n")
-
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(
         buffer,
@@ -33,22 +50,11 @@ def generate_pdf(content: str, title: str = "Document") -> bytes:
     story.append(Paragraph(title, styles["Title"]))
     story.append(Spacer(1, 0.5 * cm))
 
-    for line in lines:
-        line = line.strip()
-        if not line:
+    for style, text in _parse_markdown_lines(content):
+        if style == "spacer":
             story.append(Spacer(1, 0.3 * cm))
-            continue
-        text = _strip_html(line)
-        if not text:
-            continue
-        if line.startswith("<h1"):
-            story.append(Paragraph(text, styles["Heading1"]))
-        elif line.startswith("<h2"):
-            story.append(Paragraph(text, styles["Heading2"]))
-        elif line.startswith("<h3"):
-            story.append(Paragraph(text, styles["Heading3"]))
         else:
-            story.append(Paragraph(text, styles["Normal"]))
+            story.append(Paragraph(text, styles[style]))
 
     doc.build(story)
     return buffer.getvalue()
