@@ -14,20 +14,21 @@ import {
   DocumentEditor,
   DocumentEditorSkeleton,
 } from '@/features/document-browser/document-editor';
+import { DirectoryResponse, DocumentResponse } from '@/api/models';
 import { useDebounce } from '@/features/document-browser/hooks/use-debounce';
 import { FolderPlusIcon, FilePlusIcon } from '@/features/document-browser/icons';
 import {
-  createDirectory,
-  createDocument,
-  deleteDirectory,
-  deleteDocument,
-  directoryQueryKey,
-  documentQueryKey,
-  getDirectory,
-  getDocument,
-  updateDirectory,
-  updateDocument,
-} from '@/features/document-browser/document-browser-api';
+  createDirectoryApiDirectoriesPost as createDirectory,
+  createDocumentApiDocumentsPost as createDocument,
+  deleteDirectoryApiDirectoriesDelete as deleteDirectory,
+  deleteDocumentApiDocumentsDelete as deleteDocument,
+  getGetDirectoryApiDirectoriesGetQueryKey as directoryQueryKey,
+  getGetDocumentApiDocumentsGetQueryKey as documentQueryKey,
+  getDirectoryApiDirectoriesGet as getDirectory,
+  getDocumentApiDocumentsGet as getDocument,
+  updateDirectoryApiDirectoriesPatch as updateDirectory,
+  updateDocumentApiDocumentsPatch as updateDocument,
+} from '@/api/endpoints/api';
 import { getApiErrorMessage } from '@/lib/api-errors';
 import {
   ensureMarkdownExtension,
@@ -80,14 +81,18 @@ export function ExplorerShell({ directoryPath, documentPath }: ExplorerShellProp
   const yjsCleanupRef = useRef<(() => void) | null>(null);
 
   const directoryQuery = useQuery({
-    queryKey: directoryQueryKey(directoryPath),
-    queryFn: () => getDirectory(directoryPath),
+    queryKey: directoryQueryKey({ path: directoryPath }),
+    queryFn: () => getDirectory({ path: directoryPath }),
+    select: (res) =>
+      res && 'status' in res && res.status === 200 ? (res.data as DirectoryResponse) : undefined,
   });
 
   const documentQuery = useQuery({
-    queryKey: documentQueryKey(documentPath ?? ''),
-    queryFn: () => getDocument(documentPath ?? ''),
+    queryKey: documentQueryKey({ path: documentPath ?? '' }),
+    queryFn: () => getDocument({ path: documentPath ?? '' }),
     enabled: Boolean(documentPath),
+    select: (res) =>
+      res && 'status' in res && res.status === 200 ? (res.data as DocumentResponse) : undefined,
   });
 
   const currentDirectory = directoryQuery.data;
@@ -184,7 +189,7 @@ export function ExplorerShell({ directoryPath, documentPath }: ExplorerShellProp
   }, []);
 
   const createDirectoryMutation = useMutation({
-    mutationFn: createDirectory,
+    mutationFn: (path: string) => createDirectory({ path }),
     onSuccess: async () => {
       setNewDirectoryName('');
       await refreshDirectory(currentDirectory?.path ?? directoryPath, queryClient);
@@ -195,11 +200,13 @@ export function ExplorerShell({ directoryPath, documentPath }: ExplorerShellProp
 
   const createDocumentMutation = useMutation({
     mutationFn: ({ path, content }: { path: string; content: string }) =>
-      createDocument(path, content),
-    onSuccess: async (document) => {
+      createDocument({ path, content }),
+    onSuccess: async (res) => {
+      const document = ('data' in res ? res.data : undefined) as DocumentResponse | undefined;
+      if (!document) return;
       await Promise.all([
         refreshDirectory(document.parent_path, queryClient),
-        queryClient.invalidateQueries({ queryKey: documentQueryKey(document.path) }),
+        queryClient.invalidateQueries({ queryKey: documentQueryKey({ path: document.path }) }),
       ]);
       setStatus({ message: 'Document created.', tone: 'default' });
       void navigate({
@@ -222,8 +229,10 @@ export function ExplorerShell({ directoryPath, documentPath }: ExplorerShellProp
 
   const updateDirectoryMutation = useMutation({
     mutationFn: ({ path, newPath }: { path: string; newPath: string }) =>
-      updateDirectory(path, newPath),
-    onSuccess: async (directory, variables) => {
+      updateDirectory({ new_path: newPath }, { path }),
+    onSuccess: async (res, variables) => {
+      const directory = ('data' in res ? res.data : undefined) as DirectoryResponse | undefined;
+      if (!directory) return;
       await Promise.all([
         refreshDirectory(directory.path, queryClient),
         refreshDirectory(getParentPath(variables.path), queryClient),
@@ -237,12 +246,12 @@ export function ExplorerShell({ directoryPath, documentPath }: ExplorerShellProp
 
   const deleteDirectoryMutation = useMutation({
     mutationFn: ({ path, recursive }: { path: string; recursive: boolean }) =>
-      deleteDirectory(path, recursive),
+      deleteDirectory({ path, recursive }),
     onSuccess: async (_, variables) => {
       const parentPath = getParentPath(variables.path);
       await Promise.all([
         refreshDirectory(parentPath, queryClient),
-        queryClient.removeQueries({ queryKey: directoryQueryKey(variables.path) }),
+        queryClient.removeQueries({ queryKey: directoryQueryKey({ path: variables.path }) }),
       ]);
       setInspectorOpen(false);
       setStatus({ message: 'Directory deleted.', tone: 'default' });
@@ -262,21 +271,23 @@ export function ExplorerShell({ directoryPath, documentPath }: ExplorerShellProp
       path: string;
       content?: string;
       newPath?: string;
-    }) => updateDocument(path, { content, newPath }),
-    onSuccess: async (document, variables) => {
+    }) => updateDocument({ content, new_path: newPath }, { path }),
+    onSuccess: async (res, variables) => {
+      const document = ('data' in res ? res.data : undefined) as DocumentResponse | undefined;
+      if (!document) return;
       setIsSaving(false);
       hasUnsavedChangesRef.current = false;
 
       // Pre-populate query cache for the new path if renamed,
       // avoiding a flash where we drop back to the explorer list on rename navigation
       if (variables.newPath && variables.newPath !== variables.path) {
-        queryClient.setQueryData(documentQueryKey(document.path), document);
+        queryClient.setQueryData(documentQueryKey({ path: document.path }), document);
       }
 
       await Promise.all([
         refreshDirectory(document.parent_path, queryClient),
         refreshDirectory(getParentPath(variables.path), queryClient),
-        queryClient.invalidateQueries({ queryKey: documentQueryKey(document.path) }),
+        queryClient.invalidateQueries({ queryKey: documentQueryKey({ path: document.path }) }),
       ]);
       if (variables.newPath && variables.newPath !== variables.path) {
         // Document was renamed, navigate to new path
@@ -313,12 +324,12 @@ export function ExplorerShell({ directoryPath, documentPath }: ExplorerShellProp
   });
 
   const deleteDocumentMutation = useMutation({
-    mutationFn: deleteDocument,
+    mutationFn: (path: string) => deleteDocument({ path }),
     onSuccess: async (_, path) => {
       const parentPath = getParentPath(path);
       await Promise.all([
         refreshDirectory(parentPath, queryClient),
-        queryClient.removeQueries({ queryKey: documentQueryKey(path) }),
+        queryClient.removeQueries({ queryKey: documentQueryKey({ path }) }),
       ]);
       setStatus({ message: 'Document deleted.', tone: 'default' });
       void navigate({
@@ -659,5 +670,5 @@ const EmptyIcon = ({ className }: { className?: string }) => (
 );
 
 async function refreshDirectory(path: string, queryClient: QueryClient) {
-  await queryClient.invalidateQueries({ queryKey: directoryQueryKey(path) });
+  await queryClient.invalidateQueries({ queryKey: directoryQueryKey({ path }) });
 }
