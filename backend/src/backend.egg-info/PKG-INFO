@@ -1,0 +1,10 @@
+Metadata-Version: 2.4
+Name: backend
+Version: 0.1.0
+Requires-Python: >=3.11
+Requires-Dist: python-dotenv>=1.1.1
+Requires-Dist: fastapi>=0.136.0
+Requires-Dist: uvicorn>=0.44.0
+Requires-Dist: pycrdt>=0.13.0
+Requires-Dist: pycrdt-websocket>=0.16.1
+Requires-Dist: websockets>=15.0.1
