@@ -244,9 +244,7 @@ function LoginView({
         <div className="w-full max-w-sm space-y-8">
           {/* Heading */}
           <div className="space-y-1.5">
-            <h1 className="font-heading text-2xl font-semibold text-foreground">
-              Welcome back
-            </h1>
+            <h1 className="font-heading text-2xl font-semibold text-foreground">Welcome back</h1>
             <p className="sr-only">Authentication</p>
             <p className="text-sm text-muted-foreground">Sign in to your workspace</p>
           </div>
