@@ -200,7 +200,7 @@ def create_api_router(
         service.delete_document(path)
         collaboration_id_store.delete(path)
         return Response(status_code=status.HTTP_204_NO_CONTENT)
-    
+
     @router.get("/api/documents/export-pdf", tags=["documents"])
     async def export_document_pdf(path: str = Query(...)) -> Response:
         from src.application.pdf_service import generate_pdf
