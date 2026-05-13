@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import asyncio
+
 import markdown
 from playwright.sync_api import sync_playwright
 
@@ -21,7 +23,18 @@ _BASE_CSS = """
 """
 
 
-def generate_pdf(content: str, title: str = "Document") -> bytes:
+def _render_pdf(full_html: str) -> bytes:
+    """Run Playwright sync in a separate thread to avoid asyncio conflicts."""
+    with sync_playwright() as p:
+        browser = p.chromium.launch()
+        page = browser.new_page()
+        page.set_content(full_html)
+        pdf_bytes = page.pdf()
+        browser.close()
+    return pdf_bytes
+
+
+async def generate_pdf(content: str, title: str = "Document") -> bytes:
     """Convert Markdown to HTML, then render to PDF using Playwright + Chromium."""
     body_html = markdown.markdown(
         content,
@@ -42,11 +55,4 @@ def generate_pdf(content: str, title: str = "Document") -> bytes:
 </body>
 </html>"""
 
-    with sync_playwright() as p:
-        browser = p.chromium.launch()
-        page = browser.new_page()
-        page.set_content(full_html)
-        pdf_bytes = page.pdf()
-        browser.close()
-
-    return pdf_bytes
+    return await asyncio.to_thread(_render_pdf, full_html)
