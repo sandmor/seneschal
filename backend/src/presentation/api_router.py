@@ -200,6 +200,19 @@ def create_api_router(
         service.delete_document(path)
         collaboration_id_store.delete(path)
         return Response(status_code=status.HTTP_204_NO_CONTENT)
+    
+    @router.get("/api/documents/export-pdf", tags=["documents"])
+    async def export_document_pdf(path: str = Query(...)) -> Response:
+        from src.application.pdf_service import generate_pdf
+
+        detail = service.get_document(path)
+        title = detail.document.path.name
+        pdf_bytes = await generate_pdf(detail.content, title=title)
+        return Response(
+            content=pdf_bytes,
+            media_type="application/pdf",
+            headers={"Content-Disposition": f"attachment; filename={title}.pdf"},
+        )
 
     @secured_router.get(
         "/api/rooms/{collaboration_id}/status",
