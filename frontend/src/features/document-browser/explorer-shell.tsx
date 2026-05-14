@@ -40,7 +40,6 @@ import {
 } from '@/features/document-browser/path-utils';
 import { createYjsProvider } from '@/features/editor/yjs-provider';
 import { getStoredAuthToken } from '@/features/auth/auth-api';
-import { resolveBaseUrl } from '@/lib/orval-client';
 import { cn } from '@/lib/utils';
 
 export type ExplorerShellProps = {
@@ -113,39 +112,60 @@ export function ExplorerShell({ directoryPath, documentPath }: ExplorerShellProp
 
   // Manage Yjs connection lifecycle per document
   useEffect(() => {
+    let cancelled = false;
+
     // Clean up previous Yjs connection
     if (yjsCleanupRef.current) {
       yjsCleanupRef.current();
       yjsCleanupRef.current = null;
     }
 
-    if (!documentPath) {
+    if (!selectedDocument?.collaboration_id) {
       setYdoc(undefined);
       setProvider(undefined);
       return;
     }
 
-    const { ydoc: newYdoc, provider: newProvider } = createYjsProvider({
-      documentPath,
-      token: getStoredAuthToken() ?? undefined,
-      apiUrl: resolveBaseUrl(),
-    });
+    const collaborationId = selectedDocument.collaboration_id;
+    const initialContent = selectedDocument.content;
 
-    setYdoc(newYdoc);
-    setProvider(newProvider);
+    (async () => {
+      try {
+        const { ydoc: newYdoc, provider: newProvider } = await createYjsProvider({
+          collaborationId,
+          token: getStoredAuthToken() ?? undefined,
+          initialContent,
+        });
 
-    yjsCleanupRef.current = () => {
-      newProvider.destroy();
-      newYdoc.destroy();
-    };
+        if (cancelled) {
+          newProvider.destroy();
+          newYdoc.destroy();
+          return;
+        }
+
+        setYdoc(newYdoc);
+        setProvider(newProvider);
+
+        yjsCleanupRef.current = () => {
+          newProvider.destroy();
+          newYdoc.destroy();
+        };
+      } catch (error) {
+        if (!cancelled) {
+          console.error('Failed to create Yjs provider:', error);
+          setStatus({ message: 'Collaboration connection failed.', tone: 'error' });
+        }
+      }
+    })();
 
     return () => {
+      cancelled = true;
       if (yjsCleanupRef.current) {
         yjsCleanupRef.current();
         yjsCleanupRef.current = null;
       }
     };
-  }, [documentPath]);
+  }, [selectedDocument?.collaboration_id]);
 
   // Update document state when document is selected
   useEffect(() => {

@@ -14,6 +14,7 @@ import logging
 from src.adapters.in_memory_token_store import InMemoryTokenStore
 from src.adapters.local_storage import LocalStorageAdapter
 from src.application.auth_service import AuthService
+from src.application.collaboration_id_store import CollaborationIdStore
 from src.application.document_management_service import DocumentManagementService
 from src.application.user_service import UserService
 from src.domain.domain_errors import (
@@ -23,11 +24,12 @@ from src.domain.domain_errors import (
     ResourceNotFoundError,
 )
 from src.presentation.api_router import create_api_router
-from src.presentation.websocket_handler import handle_document_websocket, websocket_server
+from src.presentation.websocket_handler import DocumentCollaborationHandler
+from pycrdt.websocket import WebsocketServer
 
 
 @asynccontextmanager
-async def lifespan(_: FastAPI):
+async def _lifespan(_: FastAPI, websocket_server: WebsocketServer):
     """Manage the application lifespan events, like starting the websocket server."""
     async with websocket_server:
         yield
@@ -45,11 +47,14 @@ def create_app() -> FastAPI:
         token_store=token_store,
     )
     user_service = UserService()
+    collaboration_id_store = CollaborationIdStore()
+    websocket_server = WebsocketServer(auto_clean_rooms=False)
+    collaboration_handler = DocumentCollaborationHandler(websocket_server)
 
     app = FastAPI(
         title="Seneschal API",
         summary="Document management API for directories, markdown documents, and authentication.",
-        lifespan=lifespan,
+        lifespan=lambda app: _lifespan(app, websocket_server),
     )
 
     logger = logging.getLogger("seneschal")
@@ -70,7 +75,7 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
 
-    app.include_router(create_api_router(service, auth_service, user_service, token_store))
+    app.include_router(create_api_router(service, auth_service, user_service, token_store, collaboration_id_store, collaboration_handler))
 
     @app.middleware("http")
     async def log_request_url(request: Request, call_next):
@@ -78,9 +83,9 @@ def create_app() -> FastAPI:
         response = await call_next(request)
         return response
 
-    @app.websocket("/ws/documents/{path:path}")
-    async def document_websocket(websocket: WebSocket, path: str) -> None:
-        await handle_document_websocket(websocket, path)
+    @app.websocket("/api/documents/yjs/{collaboration_id}")
+    async def document_websocket(websocket: WebSocket, collaboration_id: str) -> None:
+        await collaboration_handler.handle_document_websocket(websocket, collaboration_id)
 
     @app.exception_handler(InvalidPathError)
     async def handle_invalid_path(_: Request, error: InvalidPathError) -> JSONResponse:

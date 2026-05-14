@@ -12,7 +12,7 @@ export class ApiError extends Error {
 
 export function resolveBaseUrl() {
   if (typeof window !== 'undefined') {
-    return window.location.origin + '/api';
+    return import.meta.env.VITE_PUBLIC_API_URL ?? 'http://127.0.0.1:8000';
   }
 
   return (

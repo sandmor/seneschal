@@ -10,7 +10,7 @@
     "dev": "bun run build && bun run start:watch",
     "start": "bun run server.ts",
     "start:watch": "bun --watch server.ts",
-    "api:generate": "orval --config ./orval.config.ts",
+    "api:generate": "orval --config ./orval.config.ts --tsconfig ./tsconfig.app.json",
     "lint": "eslint . && bun run typecheck",
     "typecheck": "tsc --noEmit -p tsconfig.app.json && tsc --noEmit -p tsconfig.node.json"
   },
