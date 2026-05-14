@@ -10,9 +10,18 @@ export class ApiError extends Error {
   }
 }
 
+export const getEnvVar = (key: string): string => {
+  // Check runtime variables injected by Express first
+  if (typeof window !== 'undefined' && window.__ENV__ && window.__ENV__[key]) {
+    return window.__ENV__[key];
+  }
+
+  return import.meta.env[key] || '';
+};
+
 export function resolveBaseUrl() {
   if (typeof window !== 'undefined') {
-    return import.meta.env.VITE_PUBLIC_API_URL ?? 'http://127.0.0.1:8000';
+    return getEnvVar('VITE_PUBLIC_API_URL') || 'http://127.0.0.1:8000';
   }
 
   return (
