@@ -99,9 +99,7 @@ class DocumentCollaborationHandler:
                 "WebSocket connection rejected for collaboration_id: %s - Room not initialized",
                 collaboration_id,
             )
-            await websocket.close(
-                code=4001, reason="Room not initialized"
-            )
+            await websocket.close(code=4001, reason="Room not initialized")
             return
 
         logger.info("WebSocket connection accepted for collaboration_id: %s", collaboration_id)

@@ -75,7 +75,16 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
 
-    app.include_router(create_api_router(service, auth_service, user_service, token_store, collaboration_id_store, collaboration_handler))
+    app.include_router(
+        create_api_router(
+            service,
+            auth_service,
+            user_service,
+            token_store,
+            collaboration_id_store,
+            collaboration_handler,
+        )
+    )
 
     @app.middleware("http")
     async def log_request_url(request: Request, call_next):
