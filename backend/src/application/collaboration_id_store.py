@@ -38,23 +38,23 @@ class CollaborationIdStore:
             old_dir_path += "/"
         if not new_dir_path.endswith("/"):
             new_dir_path += "/"
-            
+
         with self._lock:
             keys_to_update = [k for k in self._path_to_id.keys() if k.startswith(old_dir_path)]
             for old_key in keys_to_update:
-                new_key = new_dir_path + old_key[len(old_dir_path):]
+                new_key = new_dir_path + old_key[len(old_dir_path) :]
                 self._path_to_id[new_key] = self._path_to_id.pop(old_key)
 
     def delete(self, path: str) -> None:
         """Remove the collaboration UUID for *path*, if any."""
         with self._lock:
             self._path_to_id.pop(path, None)
-            
+
     def delete_directory(self, dir_path: str) -> None:
         """Remove the collaboration UUIDs for all documents within a directory."""
         if not dir_path.endswith("/"):
             dir_path += "/"
-            
+
         with self._lock:
             keys_to_delete = [k for k in self._path_to_id.keys() if k.startswith(dir_path)]
             for key in keys_to_delete:
