@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import base64
 from typing import Annotated
 
 from fastapi import APIRouter, HTTPException, Header, Query, Response, status
 
 from src.application.auth_service import AuthService
+from src.application.collaboration_id_store import CollaborationIdStore
 from src.application.document_management_service import DocumentManagementService
 from src.application.token_store import TokenStore
 from src.application.user_service import UserService
@@ -15,14 +17,18 @@ from src.presentation.api_schemas import (
     CreateDocumentRequest,
     DirectoryResponse,
     DocumentResponse,
+    InitializeRoomRequest,
+    InitializeRoomResponse,
     LoginRequest,
     LoginResponse,
+    RoomStatusResponse,
     UpdateDirectoryRequest,
     UpdateDocumentRequest,
     UserResponse,
     serialize_directory,
     serialize_document,
 )
+from src.presentation.websocket_handler import DocumentCollaborationHandler
 
 
 def create_api_router(
@@ -30,6 +36,8 @@ def create_api_router(
     auth_service: AuthService,
     user_service: UserService,
     token_store: TokenStore,
+    collaboration_id_store: CollaborationIdStore,
+    collaboration_handler: DocumentCollaborationHandler,
 ) -> APIRouter:
     router = APIRouter()
 
@@ -99,7 +107,10 @@ def create_api_router(
 
     @router.get("/api/directories", response_model=DirectoryResponse, tags=["directories"])
     async def get_directory(path: str = Query(default="/")) -> DirectoryResponse:
-        return serialize_directory(service.get_directory(path))
+        return serialize_directory(
+            service.get_directory(path),
+            collaboration_id_store=collaboration_id_store,
+        )
 
     @router.post(
         "/api/directories",
@@ -108,14 +119,21 @@ def create_api_router(
         tags=["directories"],
     )
     async def create_directory(request: CreateDirectoryRequest) -> DirectoryResponse:
-        return serialize_directory(service.create_directory(request.path))
+        return serialize_directory(
+            service.create_directory(request.path),
+            collaboration_id_store=collaboration_id_store,
+        )
 
     @router.patch("/api/directories", response_model=DirectoryResponse, tags=["directories"])
     async def update_directory(
         request: UpdateDirectoryRequest,
         path: str = Query(...),
     ) -> DirectoryResponse:
-        return serialize_directory(service.rename_directory(path, request.new_path))
+        collaboration_id_store.rename_directory(path, request.new_path)
+        return serialize_directory(
+            service.rename_directory(path, request.new_path),
+            collaboration_id_store=collaboration_id_store,
+        )
 
     @router.delete("/api/directories", status_code=status.HTTP_204_NO_CONTENT, tags=["directories"])
     async def delete_directory(
@@ -123,11 +141,14 @@ def create_api_router(
         recursive: bool = Query(default=False),
     ) -> Response:
         service.delete_directory(path, recursive=recursive)
+        collaboration_id_store.delete_directory(path)
         return Response(status_code=status.HTTP_204_NO_CONTENT)
 
     @router.get("/api/documents", response_model=DocumentResponse, tags=["documents"])
     async def get_document(path: str = Query(...)) -> DocumentResponse:
-        return serialize_document(service.get_document(path))
+        detail = service.get_document(path)
+        collab_id = collaboration_id_store.get_or_create(path)
+        return serialize_document(detail, collab_id)
 
     @router.post(
         "/api/documents",
@@ -136,24 +157,58 @@ def create_api_router(
         tags=["documents"],
     )
     async def create_document(request: CreateDocumentRequest) -> DocumentResponse:
-        return serialize_document(service.create_document(request.path, request.content))
+        detail = service.create_document(request.path, request.content)
+        collab_id = collaboration_id_store.get_or_create(detail.document.path.value)
+        return serialize_document(detail, collab_id)
 
     @router.patch("/api/documents", response_model=DocumentResponse, tags=["documents"])
     async def update_document(
         request: UpdateDocumentRequest,
         path: str = Query(...),
     ) -> DocumentResponse:
-        return serialize_document(
-            service.update_document(
-                path,
-                content=request.content,
-                raw_destination_path=request.new_path,
-            )
+        if request.new_path and request.new_path != path:
+            collaboration_id_store.rename(path, request.new_path)
+        detail = service.update_document(
+            path,
+            content=request.content,
+            raw_destination_path=request.new_path,
         )
+        collab_id = collaboration_id_store.get_or_create(detail.document.path.value)
+        return serialize_document(detail, collab_id)
 
     @router.delete("/api/documents", status_code=status.HTTP_204_NO_CONTENT, tags=["documents"])
     async def delete_document(path: str = Query(...)) -> Response:
         service.delete_document(path)
+        collaboration_id_store.delete(path)
         return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+    @router.get(
+        "/api/rooms/{collaboration_id}/status",
+        response_model=RoomStatusResponse,
+        tags=["rooms"],
+    )
+    async def check_room_status_endpoint(collaboration_id: str) -> RoomStatusResponse:
+        result = await collaboration_handler.check_room_status(collaboration_id)
+        return RoomStatusResponse(**result)
+
+    @router.post(
+        "/api/rooms/{collaboration_id}/initialize",
+        response_model=InitializeRoomResponse,
+        tags=["rooms"],
+    )
+    async def initialize_room_endpoint(
+        collaboration_id: str,
+        request: InitializeRoomRequest,
+    ) -> InitializeRoomResponse:
+        try:
+            seed = base64.b64decode(request.seed)
+        except Exception as error:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid base64 seed.",
+            ) from error
+
+        result = await collaboration_handler.initialize_room(collaboration_id, seed)
+        return InitializeRoomResponse(**result)
 
     return router

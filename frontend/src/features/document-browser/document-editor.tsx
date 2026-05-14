@@ -14,10 +14,10 @@ export interface Breadcrumb {
 
 export interface EditorDocument {
   path: string;
-  // eslint-disable-next-line @typescript-eslint/naming-convention
-  parent_path: string;
   name: string;
   content: string;
+  // eslint-disable-next-line @typescript-eslint/naming-convention
+  collaboration_id: string;
 }
 
 export interface DocumentEditorProps {
