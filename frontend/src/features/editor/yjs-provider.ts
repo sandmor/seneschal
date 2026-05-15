@@ -372,12 +372,10 @@ function bindPresenceCleanup(provider: WebsocketProvider) {
   };
 
   window.addEventListener('pagehide', clearPresence);
-  window.addEventListener('beforeunload', clearPresence);
 
   const destroy = provider.destroy.bind(provider);
   provider.destroy = () => {
     window.removeEventListener('pagehide', clearPresence);
-    window.removeEventListener('beforeunload', clearPresence);
     provider.awareness.setLocalState(null);
     destroy();
   };
