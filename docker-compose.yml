@@ -1,5 +1,6 @@
 services:
   backend:
+    image: sandmor/seneschal-backend:latest
     build:
       context: .
       dockerfile: backend/Dockerfile
@@ -15,6 +16,7 @@ services:
       - app-network
 
   frontend:
+    image: sandmor/seneschal-frontend:latest
     build:
       context: .
       dockerfile: frontend/Dockerfile
