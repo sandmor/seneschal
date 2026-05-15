@@ -4,6 +4,7 @@ import { getStoredAuthToken } from '@/features/auth/auth-api';
 
 export const Route = createFileRoute('/')({
   beforeLoad: () => {
+    if (typeof window === 'undefined') return;
     const token = getStoredAuthToken();
     if (!token) {
       throw redirect({ to: '/auth' });

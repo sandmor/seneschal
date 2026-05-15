@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import secrets
 from contextlib import asynccontextmanager
 from pathlib import Path
 from urllib.parse import urlsplit, urlunsplit
@@ -10,8 +11,8 @@ from fastapi import FastAPI, Request, WebSocket, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from src.adapters.in_memory_token_store import InMemoryTokenStore
 from src.adapters.local_storage import LocalStorageAdapter
+from src.adapters.jwt_token_store import JwtTokenStore
 from src.application.auth_service import AuthService
 from src.application.document_management_service import DocumentManagementService
 from src.application.user_service import UserService
@@ -37,12 +38,17 @@ def create_app() -> FastAPI:
 
     storage = LocalStorageAdapter(_resolve_data_directory())
     service = DocumentManagementService(storage=storage)
-    token_store = InMemoryTokenStore()
+
+    # Use JWT_SECRET_KEY from env, or generate a random one for development
+    secret_key = os.getenv("JWT_SECRET_KEY") or secrets.token_urlsafe(32)
+
     auth_service = AuthService(
         admin_username=os.getenv("ADMIN_USERNAME", "admin"),
         admin_password=os.getenv("ADMIN_PASSWORD", "admin123"),
-        token_store=token_store,
+        secret_key=secret_key,
     )
+
+    token_store = JwtTokenStore(auth_service)
     user_service = UserService()
 
     app = FastAPI(
@@ -106,7 +112,6 @@ def _build_allowed_origins() -> list[str]:
             )
 
     extra_origins = os.getenv("EXTRA_ALLOWED_ORIGINS", "")
-
     candidates.extend(origin.strip() for origin in extra_origins.split(",") if origin.strip())
 
     return list(dict.fromkeys(candidates))
