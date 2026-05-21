@@ -1,0 +1,23 @@
+from __future__ import annotations
+
+from typing import Protocol
+
+from src.domain.role_entities import Role
+
+
+class RoleRepository(Protocol):
+    def create_role(
+        self, name: str, description: str = "", permissions: list[str] | None = None
+    ) -> Role: ...
+
+    def list_roles(self) -> list[Role]: ...
+
+    def update_role(
+        self, role_id: int, name: str, description: str, permissions: list[str] | None = None
+    ) -> Role | None: ...
+
+    def delete_role(self, role_id: int) -> bool: ...
+
+    def assign_role_to_user(self, user_id: int, role_id: int) -> bool: ...
+
+    def revoke_role_from_user(self, user_id: int, role_id: int) -> bool: ...

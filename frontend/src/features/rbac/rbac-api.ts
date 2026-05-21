@@ -1,215 +1,115 @@
-// 🔥 MOCK API — RBAC (roles, permisos, usuarios)
+import {
+  assignRoleApiAdminUsersUserIdRolesRoleIdPost,
+  createRoleApiAdminRolesPost,
+  createUserApiAdminUsersPost,
+  deactivateUserApiAdminUsersUserIdDeactivatePatch,
+  deleteRoleApiAdminRolesRoleIdDelete,
+  listRolesApiAdminRolesGet,
+  listUsersApiAdminUsersGet,
+  revokeRoleApiAdminUsersUserIdRolesRoleIdDelete,
+  updateRoleApiAdminRolesRoleIdPatch,
+} from '@/api/endpoints/api';
+import type {
+  CreateManagedUserRequest,
+  ManagedUserResponse,
+  RoleRequest,
+  RoleResponse,
+} from '@/api/models';
+import { getStoredAuthToken } from '@/features/auth/auth-api';
 
-export type Permission = {
-  id: string;
-  name: string;
-  description: string;
-  resource: string;
-  action: 'create' | 'read' | 'update' | 'delete' | 'manage';
-};
-
-export type Role = {
-  id: string;
-  name: string;
-  description: string;
-  permissionIds: string[];
-  createdAt: string;
-};
+export type Role = RoleResponse;
 
 export type RbacUser = {
-  id: string;
-  name: string;
-  email: string;
-  roleIds: string[];
+  id: number;
+  username: string;
+  isActive: boolean;
+  roles: Role[];
 };
 
-// 🧠 Estado en memoria
-const store = {
-  permissions: new Map<string, Permission>([
-    [
-      'perm_1',
-      {
-        id: 'perm_1',
-        name: 'documents.read',
-        description: 'Read documents',
-        resource: 'documents',
-        action: 'read',
-      },
-    ],
-    [
-      'perm_2',
-      {
-        id: 'perm_2',
-        name: 'documents.create',
-        description: 'Create documents',
-        resource: 'documents',
-        action: 'create',
-      },
-    ],
-    [
-      'perm_3',
-      {
-        id: 'perm_3',
-        name: 'documents.update',
-        description: 'Edit documents',
-        resource: 'documents',
-        action: 'update',
-      },
-    ],
-    [
-      'perm_4',
-      {
-        id: 'perm_4',
-        name: 'documents.delete',
-        description: 'Delete documents',
-        resource: 'documents',
-        action: 'delete',
-      },
-    ],
-    [
-      'perm_5',
-      {
-        id: 'perm_5',
-        name: 'roles.manage',
-        description: 'Manage roles',
-        resource: 'roles',
-        action: 'manage',
-      },
-    ],
-    [
-      'perm_6',
-      {
-        id: 'perm_6',
-        name: 'users.manage',
-        description: 'Manage users',
-        resource: 'users',
-        action: 'manage',
-      },
-    ],
-  ]),
-  roles: new Map<string, Role>([
-    [
-      'role_1',
-      {
-        id: 'role_1',
-        name: 'Admin',
-        description: 'Full access to everything',
-        permissionIds: ['perm_1', 'perm_2', 'perm_3', 'perm_4', 'perm_5', 'perm_6'],
-        createdAt: '2024-01-01',
-      },
-    ],
-    [
-      'role_2',
-      {
-        id: 'role_2',
-        name: 'Editor',
-        description: 'Can read and edit documents',
-        permissionIds: ['perm_1', 'perm_2', 'perm_3'],
-        createdAt: '2024-01-02',
-      },
-    ],
-    [
-      'role_3',
-      {
-        id: 'role_3',
-        name: 'Viewer',
-        description: 'Read-only access',
-        permissionIds: ['perm_1'],
-        createdAt: '2024-01-03',
-      },
-    ],
-  ]),
-  users: new Map<string, RbacUser>([
-    [
-      'user_1',
-      {
-        id: 'user_1',
-        name: 'Santiago Morales',
-        email: 'santiago@example.com',
-        roleIds: ['role_1'],
-      },
-    ],
-    ['user_2', { id: 'user_2', name: 'Ana García', email: 'ana@example.com', roleIds: ['role_2'] }],
-    [
-      'user_3',
-      { id: 'user_3', name: 'Carlos López', email: 'carlos@example.com', roleIds: ['role_3'] },
-    ],
-  ]),
-};
-
-let idCounter = 100;
-const newId = (prefix: string) => `${prefix}_${++idCounter}`;
-
-// 📋 Permissions
-export async function getPermissions(): Promise<Permission[]> {
-  return Array.from(store.permissions.values());
+function authHeader(): RequestInit {
+  const token = getStoredAuthToken();
+  return token ? { headers: { Authorization: `Bearer ${token}` } } : {};
 }
 
-export async function createPermission(data: Omit<Permission, 'id'>): Promise<Permission> {
-  const id = newId('perm');
-  const permission: Permission = { id, ...data };
-  store.permissions.set(id, permission);
-  return permission;
+function toRbacUser(user: ManagedUserResponse): RbacUser {
+  return {
+    id: user.id,
+    username: user.username,
+    isActive: user.is_active,
+    roles: user.roles,
+  };
 }
 
-export async function updatePermission(
-  id: string,
-  data: Partial<Omit<Permission, 'id'>>,
-): Promise<Permission> {
-  const existing = store.permissions.get(id);
-  if (!existing) throw new Error('Permission not found');
-  const updated = { ...existing, ...data };
-  store.permissions.set(id, updated);
-  return updated;
-}
-
-export async function deletePermission(id: string): Promise<void> {
-  store.permissions.delete(id);
-  // Remove from roles too
-  for (const role of store.roles.values()) {
-    role.permissionIds = role.permissionIds.filter((p) => p !== id);
-  }
-}
-
-// 🎭 Roles
 export async function getRoles(): Promise<Role[]> {
-  return Array.from(store.roles.values());
-}
-
-export async function createRole(data: Omit<Role, 'id' | 'createdAt'>): Promise<Role> {
-  const id = newId('role');
-  const role: Role = { id, ...data, createdAt: new Date().toISOString().split('T')[0] };
-  store.roles.set(id, role);
-  return role;
-}
-
-export async function updateRole(
-  id: string,
-  data: Partial<Omit<Role, 'id' | 'createdAt'>>,
-): Promise<Role> {
-  const existing = store.roles.get(id);
-  if (!existing) throw new Error('Role not found');
-  const updated = { ...existing, ...data };
-  store.roles.set(id, updated);
-  return updated;
-}
-
-export async function deleteRole(id: string): Promise<void> {
-  store.roles.delete(id);
-  for (const user of store.users.values()) {
-    user.roleIds = user.roleIds.filter((r) => r !== id);
+  const response = await listRolesApiAdminRolesGet(authHeader());
+  if (response.status !== 200) {
+    throw new Error('Failed to load roles');
   }
+  return response.data;
 }
 
-// 👥 Users
+export async function createRole(data: RoleRequest): Promise<Role> {
+  const response = await createRoleApiAdminRolesPost(data, authHeader());
+  if (response.status !== 201) {
+    throw new Error('Failed to create role');
+  }
+  return response.data;
+}
+
+export async function updateRole(id: number, data: RoleRequest): Promise<Role> {
+  const response = await updateRoleApiAdminRolesRoleIdPatch(id, data, authHeader());
+  if (response.status !== 200) {
+    throw new Error('Failed to update role');
+  }
+  return response.data;
+}
+
+export async function deleteRole(id: number): Promise<void> {
+  await deleteRoleApiAdminRolesRoleIdDelete(id, authHeader());
+}
+
 export async function getRbacUsers(): Promise<RbacUser[]> {
-  return Array.from(store.users.values());
+  const response = await listUsersApiAdminUsersGet(authHeader());
+  if (response.status !== 200) {
+    throw new Error('Failed to load users');
+  }
+  return response.data.map(toRbacUser);
 }
 
-export async function updateUserRoles(userId: string, roleIds: string[]): Promise<RbacUser> {
-  const existing = store.users.get(userId);
-  if (!existing) throw new Error('User not found');
-  const updated = { ...existing, roleIds };
-  store.users.set(userId, updated);
-  return updated;
+export async function createUser(username: string, password: string): Promise<RbacUser> {
+  const payload: CreateManagedUserRequest = { username, password };
+  const response = await createUserApiAdminUsersPost(payload, authHeader());
+  if (response.status !== 201) {
+    throw new Error('Failed to create user');
+  }
+  return toRbacUser(response.data);
+}
+
+export async function updateUserRoles(userId: number, roleIds: number[]): Promise<void> {
+  const existingUsers = await getRbacUsers();
+  const user = existingUsers.find((candidate) => candidate.id === userId);
+  if (!user) {
+    throw new Error('User not found');
+  }
+
+  const currentRoleIds = new Set(user.roles.map((role) => role.id));
+  const nextRoleIds = new Set(roleIds);
+
+  await Promise.all(
+    roleIds
+      .filter((roleId) => !currentRoleIds.has(roleId))
+      .map((roleId) => assignRoleApiAdminUsersUserIdRolesRoleIdPost(userId, roleId, authHeader())),
+  );
+
+  await Promise.all(
+    Array.from(currentRoleIds)
+      .filter((roleId) => !nextRoleIds.has(roleId))
+      .map((roleId) =>
+        revokeRoleApiAdminUsersUserIdRolesRoleIdDelete(userId, roleId, authHeader()),
+      ),
+  );
+}
+
+export async function deactivateUser(userId: number): Promise<void> {
+  await deactivateUserApiAdminUsersUserIdDeactivatePatch(userId, authHeader());
 }

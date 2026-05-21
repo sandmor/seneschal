@@ -3,12 +3,13 @@ from __future__ import annotations
 import base64
 from typing import Annotated
 
-from fastapi import APIRouter, HTTPException, Header, Query, Response, status
+from fastapi import APIRouter, Header, HTTPException, Query, Response, status
 
 from src.application.auth_service import AuthService
 from src.application.collaboration_id_store import CollaborationIdStore
 from src.application.document_management_service import DocumentManagementService
 from src.application.user_service import UserService
+from src.domain.auth_entities import AuthenticatedPrincipal
 from src.domain.domain_errors import InvalidCredentialsError
 from src.presentation.api_schemas import (
     AdminProfileResponse,
@@ -39,7 +40,7 @@ def create_api_router(
 ) -> APIRouter:
     router = APIRouter()
 
-    def require_bearer_token(authorization: str | None) -> str:
+    def require_current_principal(authorization: str | None) -> AuthenticatedPrincipal:
         if not authorization:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
@@ -55,14 +56,14 @@ def create_api_router(
                 headers={"WWW-Authenticate": "Bearer"},
             )
 
-        if not auth_service.verify_token(token):
+        try:
+            return auth_service.get_current_principal(token)
+        except InvalidCredentialsError as error:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Invalid token.",
                 headers={"WWW-Authenticate": "Bearer"},
-            )
-
-        return token
+            ) from error
 
     @router.get("/health", tags=["system"])
     async def healthcheck() -> dict[str, str]:
@@ -85,7 +86,8 @@ def create_api_router(
     async def logout(
         authorization: Annotated[str | None, Header()] = None,
     ) -> dict[str, str]:
-        token = require_bearer_token(authorization)
+        token = authorization.partition(" ")[2] if authorization else ""
+        require_current_principal(authorization)
         auth_service.logout(token)
         return {"status": "ok"}
 
@@ -93,14 +95,14 @@ def create_api_router(
     async def get_profile(
         authorization: Annotated[str | None, Header()] = None,
     ) -> AdminProfileResponse:
-        require_bearer_token(authorization)
-        return AdminProfileResponse.from_domain(auth_service.get_admin_profile())
+        principal = require_current_principal(authorization)
+        return AdminProfileResponse.from_domain(principal)
 
     @router.get("/api/users", response_model=list[UserResponse], tags=["users"])
     async def get_users(
         authorization: Annotated[str | None, Header()] = None,
     ) -> list[UserResponse]:
-        require_bearer_token(authorization)
+        require_current_principal(authorization)
         return [UserResponse.from_domain(user) for user in user_service.list_users()]
 
     @router.get("/api/directories", response_model=DirectoryResponse, tags=["directories"])

@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from typing import Protocol
 
+from src.domain.auth_entities import AuthenticatedPrincipal
+
 
 class TokenProviderPort(Protocol):
     """
@@ -15,7 +17,15 @@ class TokenProviderPort(Protocol):
     expiry (~10 min) and refresh tokens have longer expiry (~7 days).
     """
 
-    def generate_access_token(self, subject: str, role: str) -> str:
+    def generate_access_token(
+        self,
+        *,
+        subject: str,
+        user_id: int,
+        roles: list[str],
+        permissions: list[str],
+        is_superadmin: bool,
+    ) -> str:
         """Generate a signed JWT access token for the given subject."""
         ...
 
@@ -23,6 +33,6 @@ class TokenProviderPort(Protocol):
         """Return True if the token signature and expiry are valid."""
         ...
 
-    def extract_subject(self, token: str) -> str:
-        """Extract the subject (e.g. username) from a valid token."""
+    def extract_principal(self, token: str) -> AuthenticatedPrincipal:
+        """Extract the principal from a valid token."""
         ...

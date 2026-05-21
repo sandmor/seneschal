@@ -20,6 +20,8 @@ type SmokeMode = 'local' | 'docker';
 type LoginResponse = { token: string };
 type AdminProfile = { name: string; role: string };
 type User = { id: number; name: string; roles: string[] };
+type Role = { id: number; name: string; description: string };
+type ManagedUser = { id: number; username: string; is_active: boolean; roles: Role[] };
 
 const mode = parseMode(process.argv[2]);
 const adminUsername = baseEnv.ADMIN_USERNAME ?? 'admin';
@@ -171,6 +173,38 @@ async function exerciseAuthFlow(apiBaseUrl: string) {
   const users = await fetchJson<User[]>(`${apiBaseUrl}/api/users`, {
     headers: authorizationHeaders,
   });
+  const createdRole = await fetchJson<Role>(`${apiBaseUrl}/api/admin/roles`, {
+    method: 'POST',
+    headers: {
+      ...authorizationHeaders,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      name: 'editor',
+      description: 'Can edit content',
+    }),
+  });
+  const createdUser = await fetchJson<ManagedUser>(`${apiBaseUrl}/api/admin/users`, {
+    method: 'POST',
+    headers: {
+      ...authorizationHeaders,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      username: 'smoke-user',
+      password: 'smoke-password',
+    }),
+  });
+  await fetchJson(`${apiBaseUrl}/api/admin/users/${createdUser.id}/roles/${createdRole.id}`, {
+    method: 'POST',
+    headers: authorizationHeaders,
+  });
+  const managedUsers = await fetchJson<ManagedUser[]>(`${apiBaseUrl}/api/admin/users`, {
+    headers: authorizationHeaders,
+  });
+  const managedRoles = await fetchJson<Role[]>(`${apiBaseUrl}/api/admin/roles`, {
+    headers: authorizationHeaders,
+  });
   const logout = await fetchJson<{ status: string }>(`${apiBaseUrl}/api/auth/logout`, {
     method: 'POST',
     headers: authorizationHeaders,
@@ -188,8 +222,23 @@ async function exerciseAuthFlow(apiBaseUrl: string) {
     );
   }
 
-  if (users.length === 0) {
-    throw new Error('Expected at least one placeholder user from /api/users.');
+  if (users.length !== 0) {
+    throw new Error(
+      `Expected /api/users to be empty before creating app users, received ${users.length}.`,
+    );
+  }
+
+  if (!managedRoles.some((role) => role.id === createdRole.id && role.name === 'editor')) {
+    throw new Error('Expected created role to be returned by /api/admin/roles.');
+  }
+
+  const managedUser = managedUsers.find((user) => user.id === createdUser.id);
+  if (!managedUser) {
+    throw new Error('Expected created user to be returned by /api/admin/users.');
+  }
+
+  if (!managedUser.roles.some((role) => role.id === createdRole.id)) {
+    throw new Error('Expected assigned role to be present on created managed user.');
   }
 
   if (logout.status !== 'ok') {

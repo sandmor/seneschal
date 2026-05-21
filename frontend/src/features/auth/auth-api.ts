@@ -1,8 +1,8 @@
 import {
-  loginApiAuthLoginPost,
-  logoutApiAuthLogoutPost,
   getProfileApiAuthMeGet,
   getUsersApiUsersGet,
+  loginApiAuthLoginPost,
+  logoutApiAuthLogoutPost,
 } from '@/api/endpoints/api';
 import type { AdminProfileResponse, UserResponse } from '@/api/models';
 import { ApiError } from '@/lib/orval-client';
@@ -35,9 +35,9 @@ export function storeAuthToken(token: string | null) {
 }
 
 export async function login(username: string, password: string): Promise<LoginResponse> {
-  const res = await loginApiAuthLoginPost({ username, password });
-  if (res.status !== 200) throw new Error('Login failed');
-  return res.data as LoginResponse;
+  const response = await loginApiAuthLoginPost({ username, password });
+  if (response.status !== 200) throw new Error('Login failed');
+  return response.data as LoginResponse;
 }
 
 export async function logout(token: string): Promise<void> {
@@ -45,13 +45,13 @@ export async function logout(token: string): Promise<void> {
 }
 
 export async function getProfile(token: string): Promise<AdminProfileResponse> {
-  const res = await getProfileApiAuthMeGet(authHeader(token));
-  if (res.status !== 200) throw new Error('Failed to get profile');
-  return res.data as AdminProfileResponse;
+  const response = await getProfileApiAuthMeGet(authHeader(token));
+  if (response.status !== 200) throw new Error('Failed to get profile');
+  return response.data as AdminProfileResponse;
 }
 
 export async function listUsers(token: string): Promise<UserResponse[]> {
-  const res = await getUsersApiUsersGet(authHeader(token));
-  if (res.status !== 200) throw new Error('Failed to list users');
-  return res.data as UserResponse[];
+  const response = await getUsersApiUsersGet(authHeader(token));
+  if (response.status !== 200) throw new Error('Failed to list users');
+  return response.data as UserResponse[];
 }
