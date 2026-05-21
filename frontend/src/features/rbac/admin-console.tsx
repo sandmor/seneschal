@@ -17,7 +17,7 @@ import {
   updateUserRoles,
 } from '@/features/rbac/rbac-api';
 
-type Tab = 'roles' | 'users';
+type Tab = 'roles' | 'users' | 'permissions';
 
 type AdminConsoleProps = {
   open: boolean;
@@ -77,7 +77,7 @@ export function AdminConsole({ open, onClose }: AdminConsoleProps) {
         </header>
 
         <div className="flex shrink-0 gap-1 border-b border-border px-6 pt-3">
-          {(['roles', 'users'] as Tab[]).map((nextTab) => (
+          {(['roles', 'users', 'permissions'] as Tab[]).map((nextTab) => (
             <button
               key={nextTab}
               type="button"
@@ -108,7 +108,7 @@ export function AdminConsole({ open, onClose }: AdminConsoleProps) {
               onRefresh={refreshAll}
               onError={(error) => setNotice(getApiErrorMessage(error))}
             />
-          ) : (
+          ) : tab === 'users' ? (
             <UsersTab
               loading={loading}
               roles={roles}
@@ -116,6 +116,8 @@ export function AdminConsole({ open, onClose }: AdminConsoleProps) {
               onRefresh={refreshAll}
               onError={(error) => setNotice(getApiErrorMessage(error))}
             />
+          ) : (
+            <PermissionsTab roles={roles} />
           )}
         </div>
       </div>
@@ -571,6 +573,61 @@ function UsersTab({
             No database users yet.
           </p>
         ) : null}
+      </div>
+    </div>
+  );
+}
+
+function PermissionsTab({ roles }: { roles: Role[] }) {
+  const adminRoles = roles.filter((role) => role.permissions?.includes('admin'));
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <div>
+          <h3 className="font-heading text-base font-semibold text-foreground">Permissions</h3>
+          <p className="text-xs text-muted-foreground">Available system privileges</p>
+        </div>
+      </div>
+
+      <div className="space-y-2">
+        <div className="rounded-lg border border-border bg-background p-4">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-semibold text-foreground">admin</span>
+                <Badge variant="outline" className="text-[10px]">
+                  System
+                </Badge>
+              </div>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Grants full access to the administration console and all system configurations.
+              </p>
+
+              <div className="mt-4">
+                <p className="mb-2 text-[11px] font-medium text-muted-foreground">
+                  Roles with this permission
+                </p>
+                {adminRoles.length === 0 ? (
+                  <p className="text-xs italic text-muted-foreground/70">None</p>
+                ) : (
+                  <div className="flex flex-wrap gap-1">
+                    {adminRoles.map((role) => (
+                      <Badge key={role.id} variant="secondary" className="text-[10px]">
+                        {role.name}
+                      </Badge>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+            <div className="flex shrink-0">
+              <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10">
+                <ShieldIcon className="h-4 w-4 text-primary" />
+              </span>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );
