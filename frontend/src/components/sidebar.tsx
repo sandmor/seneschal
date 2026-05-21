@@ -1,7 +1,9 @@
 import { useState } from 'react';
+import { useNavigate } from '@tanstack/react-router';
 import { useTheme } from '@/providers/theme-provider';
 import { cn } from '@/lib/utils';
 import { AdminConsole } from '@/features/rbac/admin-console';
+import { logout, getStoredAuthToken, storeAuthToken } from '@/features/auth/auth-api';
 
 type SidebarProps = {
   breadcrumbs?: { label: string; path: string }[];
@@ -20,6 +22,20 @@ export function Sidebar({
 }: SidebarProps) {
   const { theme, toggleTheme } = useTheme();
   const [adminOpen, setAdminOpen] = useState(false);
+  const [signingOut, setSigningOut] = useState(false);
+  const navigate = useNavigate();
+
+  const handleSignOut = async () => {
+    setSigningOut(true);
+    try {
+      const token = getStoredAuthToken();
+      if (token) await logout(token);
+    } finally {
+      storeAuthToken(null);
+      setSigningOut(false);
+      void navigate({ to: '/auth' });
+    }
+  };
 
   return (
     <>
@@ -86,15 +102,31 @@ export function Sidebar({
             {directoryCount} dir{directoryCount !== 1 && 's'} · {documentCount} doc
             {documentCount !== 1 && 's'}
           </p>
-          <button
-            type="button"
-            onClick={toggleTheme}
-            className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
-            aria-label={theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'}
-            id="theme-toggle"
-          >
-            {theme === 'dark' ? <SunIcon className="h-4 w-4" /> : <MoonIcon className="h-4 w-4" />}
-          </button>
+          <div className="flex items-center gap-1">
+            <button
+              type="button"
+              onClick={toggleTheme}
+              className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+              aria-label={theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'}
+              id="theme-toggle"
+            >
+              {theme === 'dark' ? (
+                <SunIcon className="h-4 w-4" />
+              ) : (
+                <MoonIcon className="h-4 w-4" />
+              )}
+            </button>
+            <button
+              type="button"
+              onClick={handleSignOut}
+              disabled={signingOut}
+              className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-secondary hover:text-destructive"
+              aria-label="Sign out"
+              title="Sign out"
+            >
+              <SignOutIcon className="h-4 w-4" />
+            </button>
+          </div>
         </div>
       </nav>
 
@@ -124,6 +156,20 @@ const ShieldIcon = ({ className }: { className?: string }) => (
     strokeWidth="1.8"
   >
     <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+  </svg>
+);
+
+const SignOutIcon = ({ className }: { className?: string }) => (
+  <svg
+    viewBox="0 0 24 24"
+    className={className}
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="1.8"
+  >
+    <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+    <polyline points="16 17 21 12 16 7" />
+    <line x1="21" y1="12" x2="9" y2="12" />
   </svg>
 );
 

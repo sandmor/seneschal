@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import logging
 import os
+import secrets
 from contextlib import asynccontextmanager
 from pathlib import Path
 from urllib.parse import urlsplit, urlunsplit
@@ -9,9 +11,9 @@ from dotenv import load_dotenv
 from fastapi import FastAPI, Request, WebSocket, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-import logging
+from pycrdt.websocket import WebsocketServer
 
-from src.adapters.in_memory_token_store import InMemoryTokenStore
+from src.adapters.jwt_token_adapter import JwtTokenAdapter
 from src.adapters.local_storage import LocalStorageAdapter
 from src.application.auth_service import AuthService
 from src.application.collaboration_id_store import CollaborationIdStore
@@ -25,7 +27,6 @@ from src.domain.domain_errors import (
 )
 from src.presentation.api_router import create_api_router
 from src.presentation.websocket_handler import DocumentCollaborationHandler
-from pycrdt.websocket import WebsocketServer
 
 
 @asynccontextmanager
@@ -40,11 +41,17 @@ def create_app() -> FastAPI:
 
     storage = LocalStorageAdapter(_resolve_data_directory())
     service = DocumentManagementService(storage=storage)
-    token_store = InMemoryTokenStore()
+
+    # Use JWT_SECRET_KEY from env, or generate a random one for development.
+    # WARNING: a random key means all tokens are invalidated on restart.
+    # Set JWT_SECRET_KEY=changeme in .env for local development.
+    secret_key = os.getenv("JWT_SECRET_KEY") or secrets.token_urlsafe(32)
+
+    token_provider = JwtTokenAdapter(secret_key=secret_key)
     auth_service = AuthService(
         admin_username=os.getenv("ADMIN_USERNAME", "admin"),
         admin_password=os.getenv("ADMIN_PASSWORD", "admin123"),
-        token_store=token_store,
+        token_provider=token_provider,
     )
     user_service = UserService()
     collaboration_id_store = CollaborationIdStore()
@@ -80,7 +87,6 @@ def create_app() -> FastAPI:
             service,
             auth_service,
             user_service,
-            token_store,
             collaboration_id_store,
             collaboration_handler,
         )
@@ -137,7 +143,6 @@ def _build_allowed_origins() -> list[str]:
             )
 
     extra_origins = os.getenv("EXTRA_ALLOWED_ORIGINS", "")
-
     candidates.extend(origin.strip() for origin in extra_origins.split(",") if origin.strip())
 
     return list(dict.fromkeys(candidates))
