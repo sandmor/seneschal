@@ -8,7 +8,6 @@ from fastapi import APIRouter, HTTPException, Header, Query, Response, status
 from src.application.auth_service import AuthService
 from src.application.collaboration_id_store import CollaborationIdStore
 from src.application.document_management_service import DocumentManagementService
-from src.application.token_store import TokenStore
 from src.application.user_service import UserService
 from src.domain.domain_errors import InvalidCredentialsError
 from src.presentation.api_schemas import (
