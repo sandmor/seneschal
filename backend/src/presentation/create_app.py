@@ -11,8 +11,8 @@ from fastapi import FastAPI, Request, WebSocket, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
+from src.adapters.jwt_token_adapter import JwtTokenAdapter
 from src.adapters.local_storage import LocalStorageAdapter
-from src.adapters.jwt_token_store import JwtTokenStore
 from src.application.auth_service import AuthService
 from src.application.document_management_service import DocumentManagementService
 from src.application.user_service import UserService
@@ -28,7 +28,6 @@ from src.presentation.websocket_handler import handle_document_websocket, websoc
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
-    """Manage the application lifespan events, like starting the websocket server."""
     async with websocket_server:
         yield
 
@@ -39,16 +38,17 @@ def create_app() -> FastAPI:
     storage = LocalStorageAdapter(_resolve_data_directory())
     service = DocumentManagementService(storage=storage)
 
-    # Use JWT_SECRET_KEY from env, or generate a random one for development
+    # Use JWT_SECRET_KEY from env, or generate a random one for development.
+    # WARNING: a random key means all tokens are invalidated on restart.
+    # Set JWT_SECRET_KEY=changeme in .env for local development.
     secret_key = os.getenv("JWT_SECRET_KEY") or secrets.token_urlsafe(32)
 
+    token_provider = JwtTokenAdapter(secret_key=secret_key)
     auth_service = AuthService(
         admin_username=os.getenv("ADMIN_USERNAME", "admin"),
         admin_password=os.getenv("ADMIN_PASSWORD", "admin123"),
-        secret_key=secret_key,
+        token_provider=token_provider,
     )
-
-    token_store = JwtTokenStore(auth_service)
     user_service = UserService()
 
     app = FastAPI(
@@ -65,7 +65,9 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
 
-    app.include_router(create_api_router(service, auth_service, user_service, token_store))
+    # Pass token_provider as token_store — JwtTokenAdapter satisfies the TokenStore protocol
+    # via is_valid (contains), and no-ops for add/remove since JWT is stateless.
+    app.include_router(create_api_router(service, auth_service, user_service, token_provider))
 
     @app.websocket("/ws/documents/{path:path}")
     async def document_websocket(websocket: WebSocket, path: str) -> None:
