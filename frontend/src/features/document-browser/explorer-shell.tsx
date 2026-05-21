@@ -14,20 +14,21 @@ import {
   DocumentEditor,
   DocumentEditorSkeleton,
 } from '@/features/document-browser/document-editor';
+import { DirectoryResponse, DocumentResponse } from '@/api/models';
 import { useDebounce } from '@/features/document-browser/hooks/use-debounce';
 import { FolderPlusIcon, FilePlusIcon } from '@/features/document-browser/icons';
 import {
-  createDirectory,
-  createDocument,
-  deleteDirectory,
-  deleteDocument,
-  directoryQueryKey,
-  documentQueryKey,
-  getDirectory,
-  getDocument,
-  updateDirectory,
-  updateDocument,
-} from '@/features/document-browser/document-browser-api';
+  createDirectoryApiDirectoriesPost as createDirectory,
+  createDocumentApiDocumentsPost as createDocument,
+  deleteDirectoryApiDirectoriesDelete as deleteDirectory,
+  deleteDocumentApiDocumentsDelete as deleteDocument,
+  getGetDirectoryApiDirectoriesGetQueryKey as directoryQueryKey,
+  getGetDocumentApiDocumentsGetQueryKey as documentQueryKey,
+  getDirectoryApiDirectoriesGet as getDirectory,
+  getDocumentApiDocumentsGet as getDocument,
+  updateDirectoryApiDirectoriesPatch as updateDirectory,
+  updateDocumentApiDocumentsPatch as updateDocument,
+} from '@/api/endpoints/api';
 import { getApiErrorMessage } from '@/lib/api-errors';
 import {
   ensureMarkdownExtension,
@@ -39,7 +40,6 @@ import {
 } from '@/features/document-browser/path-utils';
 import { createYjsProvider } from '@/features/editor/yjs-provider';
 import { getStoredAuthToken } from '@/features/auth/auth-api';
-import { resolveBaseUrl } from '@/lib/orval-client';
 import { cn } from '@/lib/utils';
 
 export type ExplorerShellProps = {
@@ -73,21 +73,29 @@ export function ExplorerShell({ directoryPath, documentPath }: ExplorerShellProp
   const [isSaving, setIsSaving] = useState(false);
   const [editorKey, setEditorKey] = useState(0);
   const hasUnsavedChangesRef = useRef(false);
+  const unsavedChangesTimestampRef = useRef<number | null>(null);
+  const lastSeenSaveIdRef = useRef<string | null>(null);
+  const [blacklistedLeaderIds, setBlacklistedLeaderIds] = useState<Set<number>>(new Set());
 
   // Yjs collaborative state
   const [ydoc, setYdoc] = useState<Y.Doc | undefined>(undefined);
   const [provider, setProvider] = useState<WebsocketProvider | undefined>(undefined);
+  const [isYjsSynced, setIsYjsSynced] = useState(false);
   const yjsCleanupRef = useRef<(() => void) | null>(null);
 
   const directoryQuery = useQuery({
-    queryKey: directoryQueryKey(directoryPath),
-    queryFn: () => getDirectory(directoryPath),
+    queryKey: directoryQueryKey({ path: directoryPath }),
+    queryFn: () => getDirectory({ path: directoryPath }),
+    select: (res) =>
+      res && 'status' in res && res.status === 200 ? (res.data as DirectoryResponse) : undefined,
   });
 
   const documentQuery = useQuery({
-    queryKey: documentQueryKey(documentPath ?? ''),
-    queryFn: () => getDocument(documentPath ?? ''),
+    queryKey: documentQueryKey({ path: documentPath ?? '' }),
+    queryFn: () => getDocument({ path: documentPath ?? '' }),
     enabled: Boolean(documentPath),
+    select: (res) =>
+      res && 'status' in res && res.status === 200 ? (res.data as DocumentResponse) : undefined,
   });
 
   const currentDirectory = directoryQuery.data;
@@ -108,39 +116,68 @@ export function ExplorerShell({ directoryPath, documentPath }: ExplorerShellProp
 
   // Manage Yjs connection lifecycle per document
   useEffect(() => {
+    let cancelled = false;
+
     // Clean up previous Yjs connection
     if (yjsCleanupRef.current) {
       yjsCleanupRef.current();
       yjsCleanupRef.current = null;
     }
 
-    if (!documentPath) {
+    if (!selectedDocument?.collaboration_id) {
       setYdoc(undefined);
       setProvider(undefined);
+      setIsYjsSynced(false);
       return;
     }
 
-    const { ydoc: newYdoc, provider: newProvider } = createYjsProvider({
-      documentPath,
-      token: getStoredAuthToken() ?? undefined,
-      apiUrl: resolveBaseUrl(),
-    });
+    const collaborationId = selectedDocument.collaboration_id;
+    const initialContent = selectedDocument.content;
 
-    setYdoc(newYdoc);
-    setProvider(newProvider);
+    (async () => {
+      try {
+        const { ydoc: newYdoc, provider: newProvider } = await createYjsProvider({
+          collaborationId,
+          token: getStoredAuthToken() ?? undefined,
+          initialContent,
+        });
 
-    yjsCleanupRef.current = () => {
-      newProvider.destroy();
-      newYdoc.destroy();
-    };
+        if (cancelled) {
+          newProvider.destroy();
+          newYdoc.destroy();
+          return;
+        }
+
+        setYdoc(newYdoc);
+        setProvider(newProvider);
+        setIsYjsSynced(newProvider.synced);
+
+        const handleSync = (isSynced: boolean) => {
+          setIsYjsSynced(isSynced);
+        };
+        newProvider.on('sync', handleSync);
+
+        yjsCleanupRef.current = () => {
+          newProvider.off('sync', handleSync);
+          newProvider.destroy();
+          newYdoc.destroy();
+        };
+      } catch (error) {
+        if (!cancelled) {
+          console.error('Failed to create Yjs provider:', error);
+          setStatus({ message: 'Collaboration connection failed.', tone: 'error' });
+        }
+      }
+    })();
 
     return () => {
+      cancelled = true;
       if (yjsCleanupRef.current) {
         yjsCleanupRef.current();
         yjsCleanupRef.current = null;
       }
     };
-  }, [documentPath]);
+  }, [selectedDocument?.collaboration_id]);
 
   // Update document state when document is selected
   useEffect(() => {
@@ -148,6 +185,9 @@ export function ExplorerShell({ directoryPath, documentPath }: ExplorerShellProp
       setDocumentName('');
       setDocumentContent('');
       hasUnsavedChangesRef.current = false;
+      unsavedChangesTimestampRef.current = null;
+      lastSeenSaveIdRef.current = null;
+      setBlacklistedLeaderIds(new Set());
       syncedEditorKeyRef.current = -1;
       return;
     }
@@ -158,6 +198,9 @@ export function ExplorerShell({ directoryPath, documentPath }: ExplorerShellProp
       setDocumentName(stripMarkdownExtension(selectedDocument.name));
       setDocumentContent(selectedDocument.content);
       hasUnsavedChangesRef.current = false;
+      unsavedChangesTimestampRef.current = null;
+      lastSeenSaveIdRef.current = null;
+      setBlacklistedLeaderIds(new Set());
       syncedEditorKeyRef.current = editorKey;
     }
   }, [selectedDocument, editorKey]);
@@ -165,10 +208,98 @@ export function ExplorerShell({ directoryPath, documentPath }: ExplorerShellProp
   // Auto-save: content changes
   useEffect(() => {
     if (!selectedDocument || !hasUnsavedChangesRef.current) return;
+
+    // Save Leader Election: only the client with the lowest clientID saves to the backend
+    if (provider) {
+      const clientIds = Array.from(provider.awareness.getStates().keys());
+      const eligibleIds = clientIds.filter((id) => !blacklistedLeaderIds.has(id));
+      if (eligibleIds.length > 0) {
+        const leaderId = Math.min(...eligibleIds);
+        if (provider.awareness.clientID !== leaderId) {
+          return; // Not the leader, do not save
+        }
+      }
+    }
+
     if (debouncedContent !== selectedDocument.content) {
       handleSaveDocument(debouncedContent, undefined);
     }
-  }, [debouncedContent, selectedDocument]);
+  }, [debouncedContent, selectedDocument, provider, blacklistedLeaderIds]);
+
+  // Listen for awareness changes to sync save state across clients
+  useEffect(() => {
+    if (!provider) return;
+
+    const handleAwarenessChange = () => {
+      const states = Array.from(provider.awareness.getStates().values()) as Array<{
+        save?: { status: string; saveId: string };
+      }>;
+
+      const savingState = states.find((s) => s.save?.status === 'saving');
+      if (savingState) {
+        setStatus({ message: 'Saving...', tone: 'saving' });
+        return;
+      }
+
+      const savedState = states.find((s) => s.save?.status === 'saved');
+      if (
+        savedState &&
+        savedState.save?.saveId &&
+        savedState.save.saveId !== lastSeenSaveIdRef.current
+      ) {
+        lastSeenSaveIdRef.current = savedState.save.saveId;
+        setStatus({ message: 'Saved.', tone: 'default' });
+        hasUnsavedChangesRef.current = false;
+        unsavedChangesTimestampRef.current = null;
+        setBlacklistedLeaderIds(new Set()); // Self-heal: clear the blacklist when any save succeeds
+
+        setTimeout(() => {
+          setStatus((prev) =>
+            prev?.tone === 'default' && prev.message === 'Saved.' ? null : prev,
+          );
+        }, 2000);
+      }
+    };
+
+    provider.awareness.on('change', handleAwarenessChange);
+    return () => provider.awareness.off('change', handleAwarenessChange);
+  }, [provider]);
+
+  // Lazy-Leader Detection
+  useEffect(() => {
+    if (!provider) return;
+
+    const interval = setInterval(() => {
+      if (hasUnsavedChangesRef.current && unsavedChangesTimestampRef.current) {
+        const timeWaiting = Date.now() - unsavedChangesTimestampRef.current;
+        const states = Array.from(provider.awareness.getStates().values()) as Array<{
+          save?: { status: string };
+        }>;
+        const isSaving = states.some((s) => s.save?.status === 'saving');
+
+        // Give 20 seconds if someone is actively trying to save, otherwise 10 seconds
+        const timeout = isSaving ? 20000 : 10000;
+
+        if (timeWaiting > timeout) {
+          const clientIds = Array.from(provider.awareness.getStates().keys());
+          setBlacklistedLeaderIds((prev) => {
+            const eligibleIds = clientIds.filter((id) => !prev.has(id));
+            if (eligibleIds.length > 0) {
+              const currentLeader = Math.min(...eligibleIds);
+              if (currentLeader !== provider.awareness.clientID) {
+                const next = new Set(prev);
+                next.add(currentLeader);
+                return next;
+              }
+            }
+            return prev;
+          });
+        }
+      }
+    }, 2000);
+
+    return () => clearInterval(interval);
+  }, [provider]);
 
   // Warn about unsaved changes on page unload
   useEffect(() => {
@@ -184,7 +315,7 @@ export function ExplorerShell({ directoryPath, documentPath }: ExplorerShellProp
   }, []);
 
   const createDirectoryMutation = useMutation({
-    mutationFn: createDirectory,
+    mutationFn: (path: string) => createDirectory({ path }),
     onSuccess: async () => {
       setNewDirectoryName('');
       await refreshDirectory(currentDirectory?.path ?? directoryPath, queryClient);
@@ -195,11 +326,13 @@ export function ExplorerShell({ directoryPath, documentPath }: ExplorerShellProp
 
   const createDocumentMutation = useMutation({
     mutationFn: ({ path, content }: { path: string; content: string }) =>
-      createDocument(path, content),
-    onSuccess: async (document) => {
+      createDocument({ path, content }),
+    onSuccess: async (res) => {
+      const document = ('data' in res ? res.data : undefined) as DocumentResponse | undefined;
+      if (!document) return;
       await Promise.all([
         refreshDirectory(document.parent_path, queryClient),
-        queryClient.invalidateQueries({ queryKey: documentQueryKey(document.path) }),
+        queryClient.invalidateQueries({ queryKey: documentQueryKey({ path: document.path }) }),
       ]);
       setStatus({ message: 'Document created.', tone: 'default' });
       void navigate({
@@ -222,8 +355,10 @@ export function ExplorerShell({ directoryPath, documentPath }: ExplorerShellProp
 
   const updateDirectoryMutation = useMutation({
     mutationFn: ({ path, newPath }: { path: string; newPath: string }) =>
-      updateDirectory(path, newPath),
-    onSuccess: async (directory, variables) => {
+      updateDirectory({ new_path: newPath }, { path }),
+    onSuccess: async (res, variables) => {
+      const directory = ('data' in res ? res.data : undefined) as DirectoryResponse | undefined;
+      if (!directory) return;
       await Promise.all([
         refreshDirectory(directory.path, queryClient),
         refreshDirectory(getParentPath(variables.path), queryClient),
@@ -237,12 +372,12 @@ export function ExplorerShell({ directoryPath, documentPath }: ExplorerShellProp
 
   const deleteDirectoryMutation = useMutation({
     mutationFn: ({ path, recursive }: { path: string; recursive: boolean }) =>
-      deleteDirectory(path, recursive),
+      deleteDirectory({ path, recursive }),
     onSuccess: async (_, variables) => {
       const parentPath = getParentPath(variables.path);
       await Promise.all([
         refreshDirectory(parentPath, queryClient),
-        queryClient.removeQueries({ queryKey: directoryQueryKey(variables.path) }),
+        queryClient.removeQueries({ queryKey: directoryQueryKey({ path: variables.path }) }),
       ]);
       setInspectorOpen(false);
       setStatus({ message: 'Directory deleted.', tone: 'default' });
@@ -262,21 +397,23 @@ export function ExplorerShell({ directoryPath, documentPath }: ExplorerShellProp
       path: string;
       content?: string;
       newPath?: string;
-    }) => updateDocument(path, { content, newPath }),
-    onSuccess: async (document, variables) => {
+    }) => updateDocument({ content, new_path: newPath }, { path }),
+    onSuccess: async (res, variables) => {
+      const document = ('data' in res ? res.data : undefined) as DocumentResponse | undefined;
+      if (!document) return;
       setIsSaving(false);
       hasUnsavedChangesRef.current = false;
 
       // Pre-populate query cache for the new path if renamed,
       // avoiding a flash where we drop back to the explorer list on rename navigation
       if (variables.newPath && variables.newPath !== variables.path) {
-        queryClient.setQueryData(documentQueryKey(document.path), document);
+        queryClient.setQueryData(documentQueryKey({ path: document.path }), res);
       }
 
       await Promise.all([
         refreshDirectory(document.parent_path, queryClient),
         refreshDirectory(getParentPath(variables.path), queryClient),
-        queryClient.invalidateQueries({ queryKey: documentQueryKey(document.path) }),
+        queryClient.invalidateQueries({ queryKey: documentQueryKey({ path: document.path }) }),
       ]);
       if (variables.newPath && variables.newPath !== variables.path) {
         // Document was renamed, navigate to new path
@@ -290,15 +427,18 @@ export function ExplorerShell({ directoryPath, documentPath }: ExplorerShellProp
           }),
         });
       } else {
-        // Only show badge when normally saving, not on silent rename auto-saves
-        setStatus({ message: 'Saved.', tone: 'default' });
-        setTimeout(
-          () =>
-            setStatus((prev) =>
-              prev?.tone === 'default' && prev.message === 'Saved.' ? null : prev,
-            ),
-          2000,
-        );
+        // Only show badge when normally saving and provider is missing
+        // If provider exists, awareness listener handles the UI
+        if (!provider) {
+          setStatus({ message: 'Saved.', tone: 'default' });
+          setTimeout(
+            () =>
+              setStatus((prev) =>
+                prev?.tone === 'default' && prev.message === 'Saved.' ? null : prev,
+              ),
+            2000,
+          );
+        }
       }
     },
     onError: (error) => {
@@ -313,12 +453,12 @@ export function ExplorerShell({ directoryPath, documentPath }: ExplorerShellProp
   });
 
   const deleteDocumentMutation = useMutation({
-    mutationFn: deleteDocument,
+    mutationFn: (path: string) => deleteDocument({ path }),
     onSuccess: async (_, path) => {
       const parentPath = getParentPath(path);
       await Promise.all([
         refreshDirectory(parentPath, queryClient),
-        queryClient.removeQueries({ queryKey: documentQueryKey(path) }),
+        queryClient.removeQueries({ queryKey: documentQueryKey({ path }) }),
       ]);
       setStatus({ message: 'Document deleted.', tone: 'default' });
       void navigate({
@@ -404,12 +544,34 @@ export function ExplorerShell({ directoryPath, documentPath }: ExplorerShellProp
   const handleSaveDocument = (content?: string, newPath?: string) => {
     if (!selectedDocument) return;
     setIsSaving(true);
-    setStatus({ message: 'Saving...', tone: 'saving' });
-    updateDocumentMutation.mutate({
-      path: selectedDocument.path,
-      content,
-      newPath,
-    });
+
+    let saveId: string | undefined;
+    if (provider) {
+      saveId = crypto.randomUUID();
+      provider.awareness.setLocalStateField('save', { status: 'saving', saveId });
+    } else {
+      setStatus({ message: 'Saving...', tone: 'saving' });
+    }
+
+    updateDocumentMutation.mutate(
+      {
+        path: selectedDocument.path,
+        content,
+        newPath,
+      },
+      {
+        onSuccess: () => {
+          if (provider && saveId) {
+            provider.awareness.setLocalStateField('save', { status: 'saved', saveId });
+          }
+        },
+        onError: () => {
+          if (provider && saveId) {
+            provider.awareness.setLocalStateField('save', { status: 'error', saveId });
+          }
+        },
+      },
+    );
   };
 
   const handleDeleteDocument = () => {
@@ -423,14 +585,34 @@ export function ExplorerShell({ directoryPath, documentPath }: ExplorerShellProp
 
   const handleDocumentContentChange = (content: string) => {
     setDocumentContent(content);
-    hasUnsavedChangesRef.current = true;
-    if (status?.tone === 'default') setStatus(null);
+    const isContentDirty = content !== selectedDocument?.content;
+    const isNameDirty = documentName !== stripMarkdownExtension(selectedDocument?.name ?? '');
+
+    if (isContentDirty || isNameDirty) {
+      hasUnsavedChangesRef.current = true;
+      unsavedChangesTimestampRef.current = Date.now(); // Always reset timer on every keystroke
+    } else {
+      hasUnsavedChangesRef.current = false;
+      unsavedChangesTimestampRef.current = null;
+      setBlacklistedLeaderIds(new Set());
+    }
+    if (status?.tone === 'default' || status?.tone === 'error') setStatus(null);
   };
 
   const handleDocumentNameChange = (name: string) => {
     setDocumentName(name);
-    hasUnsavedChangesRef.current = true;
-    if (status?.tone === 'default') setStatus(null);
+    const isContentDirty = documentContent !== selectedDocument?.content;
+    const isNameDirty = name !== stripMarkdownExtension(selectedDocument?.name ?? '');
+
+    if (isContentDirty || isNameDirty) {
+      hasUnsavedChangesRef.current = true;
+      unsavedChangesTimestampRef.current = Date.now(); // Always reset timer on every keystroke
+    } else {
+      hasUnsavedChangesRef.current = false;
+      unsavedChangesTimestampRef.current = null;
+      setBlacklistedLeaderIds(new Set());
+    }
+    if (status?.tone === 'default' || status?.tone === 'error') setStatus(null);
   };
 
   const handleBackToExplorer = () => {
@@ -461,7 +643,7 @@ export function ExplorerShell({ directoryPath, documentPath }: ExplorerShellProp
   );
 
   // Editor mode loading state
-  if (documentPath && documentQuery.isPending) {
+  if (documentPath && (documentQuery.isPending || (selectedDocument && !isYjsSynced))) {
     return (
       <AppShell sidebar={sidebarContent}>
         <DocumentEditorSkeleton documentPath={documentPath} />
@@ -470,7 +652,7 @@ export function ExplorerShell({ directoryPath, documentPath }: ExplorerShellProp
   }
 
   // Editor mode: full window
-  if (documentPath && selectedDocument) {
+  if (documentPath && selectedDocument && isYjsSynced) {
     return (
       <AppShell sidebar={sidebarContent}>
         <DocumentEditor
@@ -659,5 +841,5 @@ const EmptyIcon = ({ className }: { className?: string }) => (
 );
 
 async function refreshDirectory(path: string, queryClient: QueryClient) {
-  await queryClient.invalidateQueries({ queryKey: directoryQueryKey(path) });
+  await queryClient.invalidateQueries({ queryKey: directoryQueryKey({ path }) });
 }

@@ -1,3 +1,6 @@
 /// <reference types="vite/client" />
 
-declare const PUBLIC_API_URL: string;
+interface Window {
+  // eslint-disable-next-line @typescript-eslint/naming-convention
+  __ENV__: Record<string, string>;
+}

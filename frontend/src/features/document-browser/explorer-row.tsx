@@ -1,4 +1,6 @@
-import { ExplorerNode } from '@/features/document-browser/document-browser-api';
+import { DirectoryNodeResponse, DocumentNodeResponse } from '@/api/models';
+
+type ExplorerNode = DirectoryNodeResponse | DocumentNodeResponse;
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 

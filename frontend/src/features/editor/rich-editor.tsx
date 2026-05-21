@@ -19,7 +19,6 @@ import {
   ySyncPlugin,
   yUndoPlugin,
   yUndoPluginKey,
-  prosemirrorToYXmlFragment,
   undoCommand as yUndoCommand,
   redoCommand as yRedoCommand,
   absolutePositionToRelativePosition,
@@ -171,7 +170,6 @@ export function RichEditor({
     ];
 
     let state: EditorState;
-    let removeProviderSyncListener: (() => void) | undefined;
 
     if (ydoc) {
       const yXmlFragment = ydoc.get('prosemirror', Y.XmlFragment);
@@ -188,31 +186,6 @@ export function RichEditor({
         schema: markdownSchema,
         plugins,
       });
-
-      const handleSync = (isSynced: boolean) => {
-        if (!isSynced) return;
-        if (yXmlFragment.length === 0 && initialContent) {
-          const pmDoc = parseMarkdown(initialContent);
-          if (pmDoc) {
-            prosemirrorToYXmlFragment(pmDoc, yXmlFragment);
-          }
-        }
-      };
-
-      if (provider) {
-        provider.on('sync', handleSync);
-        removeProviderSyncListener = () => provider.off('sync', handleSync);
-        if ((provider as unknown as { synced: boolean }).synced) {
-          handleSync(true);
-        }
-      } else {
-        if (yXmlFragment.length === 0 && initialContent) {
-          const pmDoc = parseMarkdown(initialContent);
-          if (pmDoc) {
-            prosemirrorToYXmlFragment(pmDoc, yXmlFragment);
-          }
-        }
-      }
     } else {
       plugins.unshift(
         history(),
@@ -269,7 +242,6 @@ export function RichEditor({
 
     return () => {
       presenceBinding?.destroy();
-      removeProviderSyncListener?.();
       view.destroy();
       viewRef.current = null;
       setPresenceItems([]);
