@@ -21,8 +21,9 @@ class AuthService:
         if username == self.admin_username and password == self.admin_password:
             return self.token_provider.generate_access_token(
                 subject=username,
-                user_id=1,
+                user_id=0,
                 roles=["superadmin"],
+                permissions=["admin"],
                 is_superadmin=True,
             )
 
@@ -37,6 +38,7 @@ class AuthService:
             subject=account.username,
             user_id=account.id,
             roles=account.roles,
+            permissions=account.permissions,
             is_superadmin=False,
         )
 

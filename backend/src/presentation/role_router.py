@@ -22,7 +22,7 @@ def create_role_router(
 ) -> APIRouter:
     router = APIRouter(prefix="/api/admin", tags=["admin"])
 
-    def require_superadmin(authorization: str | None) -> AuthenticatedPrincipal:
+    def require_admin(authorization: str | None) -> AuthenticatedPrincipal:
         if not authorization:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
@@ -47,10 +47,10 @@ def create_role_router(
                 headers={"WWW-Authenticate": "Bearer"},
             ) from error
 
-        if not principal.is_superadmin:
+        if not principal.is_superadmin and "admin" not in principal.permissions:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="Superadmin access required.",
+                detail="Admin or Superadmin access required.",
             )
 
         return principal
@@ -60,15 +60,15 @@ def create_role_router(
         request: RoleRequest,
         authorization: Annotated[str | None, Header()] = None,
     ) -> RoleResponse:
-        require_superadmin(authorization)
-        role = role_management_service.create_role(request.name, request.description)
+        require_admin(authorization)
+        role = role_management_service.create_role(request.name, request.description, request.permissions)
         return RoleResponse.from_domain(role)
 
     @router.get("/roles", response_model=list[RoleResponse])
     async def list_roles(
         authorization: Annotated[str | None, Header()] = None,
     ) -> list[RoleResponse]:
-        require_superadmin(authorization)
+        require_admin(authorization)
         return [RoleResponse.from_domain(role) for role in role_management_service.list_roles()]
 
     @router.patch("/roles/{role_id}", response_model=RoleResponse)
@@ -77,8 +77,8 @@ def create_role_router(
         request: RoleRequest,
         authorization: Annotated[str | None, Header()] = None,
     ) -> RoleResponse:
-        require_superadmin(authorization)
-        role = role_management_service.update_role(role_id, request.name, request.description)
+        require_admin(authorization)
+        role = role_management_service.update_role(role_id, request.name, request.description, request.permissions)
         if role is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Role not found.")
 
@@ -89,7 +89,7 @@ def create_role_router(
         role_id: int,
         authorization: Annotated[str | None, Header()] = None,
     ) -> None:
-        require_superadmin(authorization)
+        require_admin(authorization)
         if not role_management_service.delete_role(role_id):
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Role not found.")
 
@@ -98,7 +98,7 @@ def create_role_router(
         request: CreateManagedUserRequest,
         authorization: Annotated[str | None, Header()] = None,
     ) -> ManagedUserResponse:
-        require_superadmin(authorization)
+        require_admin(authorization)
         user = role_management_service.create_user(request.username, request.password)
         return ManagedUserResponse.from_domain(user)
 
@@ -106,7 +106,7 @@ def create_role_router(
     async def list_users(
         authorization: Annotated[str | None, Header()] = None,
     ) -> list[ManagedUserResponse]:
-        require_superadmin(authorization)
+        require_admin(authorization)
         return [
             ManagedUserResponse.from_domain(user)
             for user in role_management_service.list_users()
@@ -118,7 +118,7 @@ def create_role_router(
         role_id: int,
         authorization: Annotated[str | None, Header()] = None,
     ) -> None:
-        require_superadmin(authorization)
+        require_admin(authorization)
         if not role_management_service.assign_role_to_user(user_id, role_id):
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -131,7 +131,7 @@ def create_role_router(
         role_id: int,
         authorization: Annotated[str | None, Header()] = None,
     ) -> None:
-        require_superadmin(authorization)
+        require_admin(authorization)
         if not role_management_service.revoke_role_from_user(user_id, role_id):
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -143,7 +143,7 @@ def create_role_router(
         user_id: int,
         authorization: Annotated[str | None, Header()] = None,
     ) -> None:
-        require_superadmin(authorization)
+        require_admin(authorization)
         if not role_management_service.deactivate_user(user_id):
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found.")
 

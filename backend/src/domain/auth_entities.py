@@ -8,6 +8,7 @@ class User:
     id: int
     name: str
     roles: list[str]
+    permissions: list[str]
 
 
 @dataclass(frozen=True, slots=True)
@@ -17,6 +18,7 @@ class UserAccount:
     password_hash: str
     is_active: bool
     roles: list[str]
+    permissions: list[str]
 
 
 @dataclass(frozen=True, slots=True)
@@ -25,6 +27,7 @@ class AuthenticatedPrincipal:
     username: str
     role: str
     roles: list[str]
+    permissions: list[str]
     is_superadmin: bool
 
     @property

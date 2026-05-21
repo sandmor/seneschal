@@ -12,6 +12,7 @@ class TokenProviderPort(Protocol):
         subject: str,
         user_id: int,
         roles: list[str],
+        permissions: list[str],
         is_superadmin: bool,
     ) -> str: ...
 

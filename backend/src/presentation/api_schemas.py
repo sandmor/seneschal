@@ -86,6 +86,7 @@ class AdminProfileResponse(BaseModel):
     name: str
     role: str
     roles: list[str]
+    permissions: list[str]
 
     @classmethod
     def from_domain(cls, profile: AuthenticatedPrincipal) -> "AdminProfileResponse":
@@ -94,6 +95,7 @@ class AdminProfileResponse(BaseModel):
             name=profile.name,
             role=profile.role,
             roles=profile.roles,
+            permissions=profile.permissions,
         )
 
 
@@ -101,28 +103,31 @@ class UserResponse(BaseModel):
     id: int
     name: str
     roles: list[str]
+    permissions: list[str]
 
     @classmethod
     def from_domain(cls, user: User) -> "UserResponse":
-        return cls(id=user.id, name=user.name, roles=user.roles)
+        return cls(id=user.id, name=user.name, roles=user.roles, permissions=user.permissions)
 
 
 class RoleRequest(BaseModel):
     name: str
     description: str = ""
+    permissions: list[str] = Field(default_factory=list)
 
 
 class RoleResponse(BaseModel):
     id: int
     name: str
     description: str
+    permissions: list[str]
 
     @classmethod
     def from_domain(cls, role: Role) -> "RoleResponse":
         if role.id is None:
             raise ValueError("Role must have an id before serialization.")
 
-        return cls(id=role.id, name=role.name, description=role.description)
+        return cls(id=role.id, name=role.name, description=role.description, permissions=role.permissions)
 
 
 class CreateManagedUserRequest(BaseModel):

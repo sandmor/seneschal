@@ -14,14 +14,14 @@ class RoleManagementService:
     role_repository: RoleRepository
     password_hasher: PasswordHasherPort
 
-    def create_role(self, name: str, description: str = "") -> Role:
-        return self.role_repository.create_role(name, description)
+    def create_role(self, name: str, description: str = "", permissions: list[str] | None = None) -> Role:
+        return self.role_repository.create_role(name, description, permissions)
 
     def list_roles(self) -> list[Role]:
         return self.role_repository.list_roles()
 
-    def update_role(self, role_id: int, name: str, description: str) -> Role | None:
-        return self.role_repository.update_role(role_id, name, description)
+    def update_role(self, role_id: int, name: str, description: str, permissions: list[str] | None = None) -> Role | None:
+        return self.role_repository.update_role(role_id, name, description, permissions)
 
     def delete_role(self, role_id: int) -> bool:
         return self.role_repository.delete_role(role_id)

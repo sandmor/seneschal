@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 
-from sqlalchemy import Boolean, Column, ForeignKey, Integer, String, Table, select
+from sqlalchemy import Boolean, Column, ForeignKey, Integer, String, Table, select, JSON
 from sqlalchemy.orm import Session, relationship, selectinload
 
 from src.adapters.database import Base, get_session
@@ -25,6 +25,7 @@ class RoleModel(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     name = Column(String, unique=True, nullable=False)
     description = Column(String, default="", nullable=False)
+    permissions = Column(JSON, default=list, nullable=False)
     users = relationship("UserModel", secondary=user_roles, back_populates="roles")
 
 
@@ -39,11 +40,22 @@ class UserModel(Base):
 
 
 def _to_role(role: RoleModel) -> Role:
-    return Role(id=role.id, name=role.name, description=role.description)
+    return Role(id=role.id, name=role.name, description=role.description, permissions=role.permissions)
 
+def _get_unique_permissions(roles: list[RoleModel]) -> list[str]:
+    permissions = set()
+    for role in roles:
+        if role.permissions:
+            permissions.update(role.permissions)
+    return sorted(list(permissions))
 
 def _to_user_summary(user: UserModel) -> User:
-    return User(id=user.id, name=user.username, roles=[role.name for role in user.roles])
+    return User(
+        id=user.id,
+        name=user.username,
+        roles=[role.name for role in user.roles],
+        permissions=_get_unique_permissions(user.roles)
+    )
 
 
 def _to_user_account(user: UserModel) -> UserAccount:
@@ -53,6 +65,7 @@ def _to_user_account(user: UserModel) -> UserAccount:
         password_hash=user.password_hash,
         is_active=user.is_active,
         roles=[role.name for role in user.roles],
+        permissions=_get_unique_permissions(user.roles)
     )
 
 
@@ -69,9 +82,11 @@ class SqlAlchemyRoleRepository(RoleRepository):
     def __init__(self, session_factory: Callable[[], Session]) -> None:
         self._session_factory = session_factory
 
-    def create_role(self, name: str, description: str = "") -> Role:
+    def create_role(self, name: str, description: str = "", permissions: list[str] | None = None) -> Role:
+        if permissions is None:
+            permissions = []
         with self._session_factory() as session:
-            role = RoleModel(name=name, description=description)
+            role = RoleModel(name=name, description=description, permissions=permissions)
             session.add(role)
             session.commit()
             session.refresh(role)
@@ -82,7 +97,7 @@ class SqlAlchemyRoleRepository(RoleRepository):
             roles = session.scalars(select(RoleModel).order_by(RoleModel.name)).all()
             return [_to_role(role) for role in roles]
 
-    def update_role(self, role_id: int, name: str, description: str) -> Role | None:
+    def update_role(self, role_id: int, name: str, description: str, permissions: list[str] | None = None) -> Role | None:
         with self._session_factory() as session:
             role = session.get(RoleModel, role_id)
             if role is None:
@@ -90,6 +105,8 @@ class SqlAlchemyRoleRepository(RoleRepository):
 
             role.name = name
             role.description = description
+            if permissions is not None:
+                role.permissions = permissions
             session.commit()
             session.refresh(role)
             return _to_role(role)

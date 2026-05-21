@@ -7,6 +7,7 @@ class Role:
     name: str
     description: str = ""
     id: int | None = field(default=None)
+    permissions: list[str] = field(default_factory=list)
 
 
 @dataclass(frozen=True, slots=True)

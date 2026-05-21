@@ -21,14 +21,17 @@ class JwtTokenAdapter:
         subject: str,
         user_id: int,
         roles: list[str],
+        permissions: list[str],
         is_superadmin: bool,
     ) -> str:
         normalized_roles = list(dict.fromkeys(roles))
+        normalized_permissions = list(dict.fromkeys(permissions))
         payload = {
             "sub": subject,
             "user_id": user_id,
             "role": normalized_roles[0] if normalized_roles else "",
             "roles": normalized_roles,
+            "permissions": normalized_permissions,
             "is_superadmin": is_superadmin,
             "exp": datetime.now(timezone.utc) + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES),
             "iat": datetime.now(timezone.utc),
@@ -52,12 +55,18 @@ class JwtTokenAdapter:
         if not isinstance(roles, list):
             role = str(payload.get("role", ""))
             roles = [role] if role else []
+            
+        permissions = payload.get("permissions")
+        if not isinstance(permissions, list):
+            permissions = []
 
         normalized_roles = [str(role) for role in roles]
+        normalized_permissions = [str(perm) for perm in permissions]
         return AuthenticatedPrincipal(
             id=int(payload["user_id"]),
             username=str(payload["sub"]),
             role=normalized_roles[0] if normalized_roles else "",
             roles=normalized_roles,
+            permissions=normalized_permissions,
             is_superadmin=bool(payload.get("is_superadmin", False)),
         )
