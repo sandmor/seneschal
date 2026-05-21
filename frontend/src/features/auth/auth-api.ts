@@ -1,28 +1,23 @@
-import { customInstance, ApiError } from '@/lib/orval-client';
+import {
+  loginApiAuthLoginPost,
+  logoutApiAuthLogoutPost,
+  getProfileApiAuthMeGet,
+  getUsersApiUsersGet,
+} from '@/api/endpoints/api';
+import type { AdminProfileResponse, UserResponse } from '@/api/models';
+import { ApiError } from '@/lib/orval-client';
 
 export { ApiError };
+export type { AdminProfileResponse, UserResponse };
 
 export type LoginResponse = {
   token: string;
 };
 
-export type AdminProfileResponse = {
-  id: number;
-  name: string;
-  role: string;
-  roles: string[];
-};
-
-export type UserResponse = {
-  id: number;
-  name: string;
-  roles: string[];
-};
-
 const TOKEN_KEY = 'seneschal.auth.token';
 
-function authHeaders(token: string) {
-  return { Authorization: `Bearer ${token}` };
+function authHeader(token: string): RequestInit {
+  return { headers: { Authorization: `Bearer ${token}` } };
 }
 
 export function getStoredAuthToken() {
@@ -40,31 +35,23 @@ export function storeAuthToken(token: string | null) {
 }
 
 export async function login(username: string, password: string): Promise<LoginResponse> {
-  const res = await customInstance<{ data: LoginResponse }>('/api/auth/login', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ username, password }),
-  });
-  return res.data;
+  const res = await loginApiAuthLoginPost({ username, password });
+  if (res.status !== 200) throw new Error('Login failed');
+  return res.data as LoginResponse;
 }
 
 export async function logout(token: string): Promise<void> {
-  await customInstance<void>('/api/auth/logout', {
-    method: 'POST',
-    headers: authHeaders(token),
-  });
+  await logoutApiAuthLogoutPost(authHeader(token));
 }
 
 export async function getProfile(token: string): Promise<AdminProfileResponse> {
-  const res = await customInstance<{ data: AdminProfileResponse }>('/api/auth/me', {
-    headers: authHeaders(token),
-  });
-  return res.data;
+  const res = await getProfileApiAuthMeGet(authHeader(token));
+  if (res.status !== 200) throw new Error('Failed to get profile');
+  return res.data as AdminProfileResponse;
 }
 
 export async function listUsers(token: string): Promise<UserResponse[]> {
-  const res = await customInstance<{ data: UserResponse[] }>('/api/users', {
-    headers: authHeaders(token),
-  });
-  return res.data;
+  const res = await getUsersApiUsersGet(authHeader(token));
+  if (res.status !== 200) throw new Error('Failed to list users');
+  return res.data as UserResponse[];
 }

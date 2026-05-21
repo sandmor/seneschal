@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import base64
+import token
 from typing import Annotated
 
 from fastapi import APIRouter, HTTPException, Header, Query, Response, status
 
+from backend.src.application import auth_service
 from src.application.auth_service import AuthService
 from src.application.collaboration_id_store import CollaborationIdStore
 from src.application.document_management_service import DocumentManagementService
@@ -35,7 +37,6 @@ def create_api_router(
     service: DocumentManagementService,
     auth_service: AuthService,
     user_service: UserService,
-    token_store: TokenStore,
     collaboration_id_store: CollaborationIdStore,
     collaboration_handler: DocumentCollaborationHandler,
 ) -> APIRouter:
@@ -57,7 +58,7 @@ def create_api_router(
                 headers={"WWW-Authenticate": "Bearer"},
             )
 
-        if not token_store.contains(token):
+        if not auth_service.verify_token(token):
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Invalid token.",
