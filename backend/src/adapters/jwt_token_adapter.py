@@ -7,11 +7,19 @@ import jwt
 from src.domain.auth_entities import AuthenticatedPrincipal
 from src.domain.domain_errors import InvalidCredentialsError
 
+# TODO: Implement full JWT workflow with refresh tokens.
+# Access tokens should ideally expire in ~10 minutes once refresh tokens
+# are supported. Currently set to 10 minutes as recommended.
 ACCESS_TOKEN_EXPIRE_MINUTES = 10
 ALGORITHM = "HS256"
 
 
 class JwtTokenAdapter:
+    """
+    Adapter that implements TokenProviderPort using PyJWT.
+    Stateless — no server-side token storage needed.
+    """
+
     def __init__(self, secret_key: str) -> None:
         self._secret_key = secret_key
 
@@ -70,3 +78,13 @@ class JwtTokenAdapter:
             permissions=normalized_permissions,
             is_superadmin=bool(payload.get("is_superadmin", False)),
         )
+
+    # TokenStore protocol compatibility (used by api_router to validate requests)
+    def add(self, token: str) -> None:
+        pass  # Stateless — nothing to store
+
+    def remove(self, token: str) -> None:
+        pass  # Stateless — nothing to remove
+
+    def contains(self, token: str) -> bool:
+        return self.is_valid(token)

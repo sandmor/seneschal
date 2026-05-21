@@ -43,7 +43,9 @@ class AuthService:
         )
 
     def logout(self, token: str) -> None:
-        del token
+        # JWT tokens are stateless — logout is handled client-side by discarding the token.
+        # Server-side invalidation would require a token blacklist (future improvement).
+        pass
 
     def verify_token(self, token: str) -> bool:
         return self.token_provider.is_valid(token)

@@ -47,12 +47,14 @@ def create_app() -> FastAPI:
     storage = LocalStorageAdapter(_resolve_data_directory())
     service = DocumentManagementService(storage=storage)
 
+    # Use JWT_SECRET_KEY from env, or generate a random one for development.
+    # WARNING: a random key means all tokens are invalidated on restart.
+    # Set JWT_SECRET_KEY=changeme in .env for local development.
     secret_key = os.getenv("JWT_SECRET_KEY") or secrets.token_urlsafe(32)
     token_provider = JwtTokenAdapter(secret_key=secret_key)
     password_hasher = Pbkdf2PasswordHasher()
     user_repository = create_user_repository()
     role_repository = create_role_repository()
-
     auth_service = AuthService(
         admin_username=os.getenv("ADMIN_USERNAME", "admin"),
         admin_password=os.getenv("ADMIN_PASSWORD", "admin123"),
