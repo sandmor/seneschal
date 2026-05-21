@@ -223,7 +223,9 @@ async function exerciseAuthFlow(apiBaseUrl: string) {
   }
 
   if (users.length !== 0) {
-    throw new Error(`Expected /api/users to be empty before creating app users, received ${users.length}.`);
+    throw new Error(
+      `Expected /api/users to be empty before creating app users, received ${users.length}.`,
+    );
   }
 
   if (!managedRoles.some((role) => role.id === createdRole.id && role.name === 'editor')) {

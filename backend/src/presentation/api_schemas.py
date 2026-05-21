@@ -127,7 +127,9 @@ class RoleResponse(BaseModel):
         if role.id is None:
             raise ValueError("Role must have an id before serialization.")
 
-        return cls(id=role.id, name=role.name, description=role.description, permissions=role.permissions)
+        return cls(
+            id=role.id, name=role.name, description=role.description, permissions=role.permissions
+        )
 
 
 class CreateManagedUserRequest(BaseModel):

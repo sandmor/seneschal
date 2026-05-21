@@ -55,7 +55,7 @@ class JwtTokenAdapter:
         if not isinstance(roles, list):
             role = str(payload.get("role", ""))
             roles = [role] if role else []
-            
+
         permissions = payload.get("permissions")
         if not isinstance(permissions, list):
             permissions = []

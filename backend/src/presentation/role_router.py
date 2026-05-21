@@ -61,7 +61,9 @@ def create_role_router(
         authorization: Annotated[str | None, Header()] = None,
     ) -> RoleResponse:
         require_admin(authorization)
-        role = role_management_service.create_role(request.name, request.description, request.permissions)
+        role = role_management_service.create_role(
+            request.name, request.description, request.permissions
+        )
         return RoleResponse.from_domain(role)
 
     @router.get("/roles", response_model=list[RoleResponse])
@@ -78,7 +80,9 @@ def create_role_router(
         authorization: Annotated[str | None, Header()] = None,
     ) -> RoleResponse:
         require_admin(authorization)
-        role = role_management_service.update_role(role_id, request.name, request.description, request.permissions)
+        role = role_management_service.update_role(
+            role_id, request.name, request.description, request.permissions
+        )
         if role is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Role not found.")
 
@@ -108,8 +112,7 @@ def create_role_router(
     ) -> list[ManagedUserResponse]:
         require_admin(authorization)
         return [
-            ManagedUserResponse.from_domain(user)
-            for user in role_management_service.list_users()
+            ManagedUserResponse.from_domain(user) for user in role_management_service.list_users()
         ]
 
     @router.post("/users/{user_id}/roles/{role_id}", status_code=status.HTTP_204_NO_CONTENT)
