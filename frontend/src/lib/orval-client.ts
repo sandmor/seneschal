@@ -10,17 +10,21 @@ export class ApiError extends Error {
   }
 }
 
-function resolveBrowserBaseUrl() {
-  if (typeof window === 'undefined') {
-    return undefined;
+export const getEnvVar = (key: string): string => {
+  // Check runtime variables injected by Express first
+  if (typeof window !== 'undefined' && window.__ENV__ && window.__ENV__[key]) {
+    return window.__ENV__[key];
   }
 
-  return PUBLIC_API_URL || undefined;
-}
+  return import.meta.env[key] || '';
+};
 
 export function resolveBaseUrl() {
+  if (typeof window !== 'undefined') {
+    return getEnvVar('VITE_PUBLIC_API_URL') || 'http://127.0.0.1:8000';
+  }
+
   return (
-    resolveBrowserBaseUrl() ??
     process.env.INTERNAL_API_URL ??
     process.env.VITE_PUBLIC_API_URL ??
     process.env.OPENAPI_URL?.replace(/\/openapi\.json$/, '') ??

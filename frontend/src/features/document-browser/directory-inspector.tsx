@@ -1,6 +1,6 @@
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { ExplorerDirectory } from '@/features/document-browser/document-browser-api';
+import { DirectoryResponse } from '@/api/models';
 
 /**
  * DirectoryInspector is the component shown in the inspector panel when a directory is selected.
@@ -13,7 +13,7 @@ export function DirectoryInspector({
   onSave,
   onDelete,
 }: {
-  directory: ExplorerDirectory;
+  directory: DirectoryResponse;
   directoryName: string;
   isBusy: boolean;
   onDirectoryNameChange: (value: string) => void;

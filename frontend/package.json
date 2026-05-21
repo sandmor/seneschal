@@ -10,7 +10,7 @@
     "dev": "bun run build && bun run start:watch",
     "start": "bun run server.ts",
     "start:watch": "bun --watch server.ts",
-    "api:generate": "orval --config ./orval.config.ts",
+    "api:generate": "orval --config ./orval.config.ts --tsconfig ./tsconfig.app.json",
     "lint": "eslint . && bun run typecheck",
     "typecheck": "tsc --noEmit -p tsconfig.app.json && tsc --noEmit -p tsconfig.node.json"
   },
@@ -25,6 +25,7 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "express": "^5.2.1",
+    "http-proxy-middleware": "^4.0.0",
     "prosemirror-commands": "^1.7.1",
     "prosemirror-history": "^1.5.0",
     "prosemirror-inputrules": "^1.5.1",

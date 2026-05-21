@@ -12,6 +12,11 @@ from src.domain.file_system_entities import (
     DocumentEntry,
 )
 
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from src.application.collaboration_id_store import CollaborationIdStore
+
 
 class DirectoryNodeResponse(BaseModel):
     kind: Literal["directory"] = "directory"
@@ -28,6 +33,7 @@ class DocumentNodeResponse(BaseModel):
     name: str
     parent_path: str
     size_bytes: int
+    collaboration_id: str
 
 
 NodeResponse = Annotated[DirectoryNodeResponse | DocumentNodeResponse, Field(discriminator="kind")]
@@ -101,6 +107,19 @@ class UserResponse(BaseModel):
         return cls(id=user.id, name=user.name, roles=user.roles)
 
 
+class RoomStatusResponse(BaseModel):
+    initialized: bool
+
+
+class InitializeRoomRequest(BaseModel):
+    seed: str
+
+
+class InitializeRoomResponse(BaseModel):
+    status: str
+    message: str | None = None
+
+
 def serialize_directory_entry(entry: DirectoryEntry) -> DirectoryNodeResponse:
     return DirectoryNodeResponse(
         path=entry.path.value,
@@ -111,16 +130,21 @@ def serialize_directory_entry(entry: DirectoryEntry) -> DirectoryNodeResponse:
     )
 
 
-def serialize_document_entry(entry: DocumentEntry) -> DocumentNodeResponse:
+def serialize_document_entry(entry: DocumentEntry, collaboration_id: str) -> DocumentNodeResponse:
     return DocumentNodeResponse(
         path=entry.path.value,
         name=entry.path.name,
         parent_path=entry.path.parent.value,
         size_bytes=entry.size_bytes,
+        collaboration_id=collaboration_id,
     )
 
 
-def serialize_directory(detail: DirectoryDetail) -> DirectoryResponse:
+def serialize_directory(
+    detail: DirectoryDetail,
+    *,
+    collaboration_id_store: CollaborationIdStore,
+) -> DirectoryResponse:
     directory = serialize_directory_entry(detail.directory)
     children: list[NodeResponse] = []
 
@@ -128,11 +152,12 @@ def serialize_directory(detail: DirectoryDetail) -> DirectoryResponse:
         if child.kind == "directory":
             children.append(serialize_directory_entry(child))
         else:
-            children.append(serialize_document_entry(child))
+            collab_id = collaboration_id_store.get_or_create(child.path.value)
+            children.append(serialize_document_entry(child, collab_id))
 
     return DirectoryResponse(**directory.model_dump(), children=children)
 
 
-def serialize_document(detail: DocumentDetail) -> DocumentResponse:
-    document = serialize_document_entry(detail.document)
+def serialize_document(detail: DocumentDetail, collaboration_id: str) -> DocumentResponse:
+    document = serialize_document_entry(detail.document, collaboration_id)
     return DocumentResponse(**document.model_dump(), content=detail.content)

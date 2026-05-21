@@ -14,6 +14,14 @@ const serverEntryPath = path.resolve(__dirname, './dist/server/entry-server.js')
 
 app.use(express.static(path.resolve(__dirname, './dist/client'), { index: false }));
 
+function getPublicEnvVars(): Record<string, string> {
+  return Object.fromEntries(
+    Object.entries(process.env)
+      .filter(([key]) => key.startsWith('VITE_'))
+      .map(([key, value]) => [key, value ?? '']),
+  );
+}
+
 app.get('/health', (_req: Request, res: Response) => {
   res.status(200).json({ status: 'ok' });
 });
@@ -34,7 +42,11 @@ app.use(async (req: Request, res: Response, next: NextFunction) => {
 
     const template = fs.readFileSync(clientTemplatePath, 'utf-8');
     const appHtml = await render(router);
-    const html = template.replace('<!--app-html-->', appHtml);
+    const envVars = getPublicEnvVars();
+    const envScript = `<script>window.__ENV__ = ${JSON.stringify(envVars)};</script>`;
+    const html = template
+      .replace('<!--app-html-->', appHtml)
+      .replace('</head>', `${envScript}\n</head>`);
 
     res.status(200).set({ 'Content-Type': 'text/html' }).end(html);
   } catch (e) {
