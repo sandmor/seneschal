@@ -82,14 +82,11 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
 
-    # Pass token_provider as token_store — JwtTokenAdapter satisfies the TokenStore protocol
-    # via is_valid (contains), and no-ops for add/remove since JWT is stateless.
     app.include_router(
         create_api_router(
             service,
             auth_service,
             user_service,
-            token_provider,
             collaboration_id_store,
             collaboration_handler,
         )
