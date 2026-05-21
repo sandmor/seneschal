@@ -37,14 +37,14 @@ export function AuthPage() {
 
   const profileQuery = useQuery({
     queryKey: ['auth', 'profile', token],
-    queryFn: () => getProfile(token!),
+    queryFn: () => getProfile(),
     enabled: isHydrated && Boolean(token),
     retry: false,
   });
 
   const usersQuery = useQuery({
     queryKey: ['auth', 'users', token],
-    queryFn: () => listUsers(token!),
+    queryFn: () => listUsers(),
     enabled: isHydrated && Boolean(token),
     retry: false,
   });
@@ -71,7 +71,7 @@ export function AuthPage() {
   const logoutMutation = useMutation({
     mutationFn: async () => {
       if (!token) return;
-      await logout(token);
+      await logout();
     },
     onSettled: () => {
       storeAuthToken(null);

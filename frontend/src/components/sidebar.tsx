@@ -29,7 +29,7 @@ export function Sidebar({
     setSigningOut(true);
     try {
       const token = getStoredAuthToken();
-      if (token) await logout(token);
+      if (token) await logout();
     } finally {
       storeAuthToken(null);
       setSigningOut(false);

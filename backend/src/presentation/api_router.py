@@ -3,7 +3,7 @@ from __future__ import annotations
 import base64
 from typing import Annotated
 
-from fastapi import APIRouter, Header, HTTPException, Query, Response, status
+from fastapi import APIRouter, Header, HTTPException, Query, Response, status, Depends
 
 from src.application.auth_service import AuthService
 from src.application.collaboration_id_store import CollaborationIdStore
@@ -40,7 +40,7 @@ def create_api_router(
 ) -> APIRouter:
     router = APIRouter()
 
-    def require_current_principal(authorization: str | None) -> AuthenticatedPrincipal:
+    def get_token(authorization: Annotated[str | None, Header()] = None) -> str:
         if not authorization:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
@@ -55,7 +55,9 @@ def create_api_router(
                 detail="Invalid authorization header.",
                 headers={"WWW-Authenticate": "Bearer"},
             )
+        return token
 
+    def require_current_principal(token: str = Depends(get_token)) -> AuthenticatedPrincipal:
         try:
             return auth_service.get_current_principal(token)
         except InvalidCredentialsError as error:
@@ -64,6 +66,8 @@ def create_api_router(
                 detail="Invalid token.",
                 headers={"WWW-Authenticate": "Bearer"},
             ) from error
+
+    secured_router = APIRouter(dependencies=[Depends(require_current_principal)])
 
     @router.get("/health", tags=["system"])
     async def healthcheck() -> dict[str, str]:
@@ -82,37 +86,29 @@ def create_api_router(
 
         return LoginResponse(token=token)
 
-    @router.post("/api/auth/logout", tags=["auth"])
-    async def logout(
-        authorization: Annotated[str | None, Header()] = None,
-    ) -> dict[str, str]:
-        token = authorization.partition(" ")[2] if authorization else ""
-        require_current_principal(authorization)
+    @secured_router.post("/api/auth/logout", tags=["auth"])
+    async def logout(token: str = Depends(get_token)) -> dict[str, str]:
         auth_service.logout(token)
         return {"status": "ok"}
 
-    @router.get("/api/auth/me", response_model=AdminProfileResponse, tags=["auth"])
+    @secured_router.get("/api/auth/me", response_model=AdminProfileResponse, tags=["auth"])
     async def get_profile(
-        authorization: Annotated[str | None, Header()] = None,
+        principal: AuthenticatedPrincipal = Depends(require_current_principal),
     ) -> AdminProfileResponse:
-        principal = require_current_principal(authorization)
         return AdminProfileResponse.from_domain(principal)
 
-    @router.get("/api/users", response_model=list[UserResponse], tags=["users"])
-    async def get_users(
-        authorization: Annotated[str | None, Header()] = None,
-    ) -> list[UserResponse]:
-        require_current_principal(authorization)
+    @secured_router.get("/api/users", response_model=list[UserResponse], tags=["users"])
+    async def get_users() -> list[UserResponse]:
         return [UserResponse.from_domain(user) for user in user_service.list_users()]
 
-    @router.get("/api/directories", response_model=DirectoryResponse, tags=["directories"])
+    @secured_router.get("/api/directories", response_model=DirectoryResponse, tags=["directories"])
     async def get_directory(path: str = Query(default="/")) -> DirectoryResponse:
         return serialize_directory(
             service.get_directory(path),
             collaboration_id_store=collaboration_id_store,
         )
 
-    @router.post(
+    @secured_router.post(
         "/api/directories",
         response_model=DirectoryResponse,
         status_code=status.HTTP_201_CREATED,
@@ -124,7 +120,9 @@ def create_api_router(
             collaboration_id_store=collaboration_id_store,
         )
 
-    @router.patch("/api/directories", response_model=DirectoryResponse, tags=["directories"])
+    @secured_router.patch(
+        "/api/directories", response_model=DirectoryResponse, tags=["directories"]
+    )
     async def update_directory(
         request: UpdateDirectoryRequest,
         path: str = Query(...),
@@ -135,7 +133,9 @@ def create_api_router(
             collaboration_id_store=collaboration_id_store,
         )
 
-    @router.delete("/api/directories", status_code=status.HTTP_204_NO_CONTENT, tags=["directories"])
+    @secured_router.delete(
+        "/api/directories", status_code=status.HTTP_204_NO_CONTENT, tags=["directories"]
+    )
     async def delete_directory(
         path: str = Query(...),
         recursive: bool = Query(default=False),
@@ -144,13 +144,13 @@ def create_api_router(
         collaboration_id_store.delete_directory(path)
         return Response(status_code=status.HTTP_204_NO_CONTENT)
 
-    @router.get("/api/documents", response_model=DocumentResponse, tags=["documents"])
+    @secured_router.get("/api/documents", response_model=DocumentResponse, tags=["documents"])
     async def get_document(path: str = Query(...)) -> DocumentResponse:
         detail = service.get_document(path)
         collab_id = collaboration_id_store.get_or_create(path)
         return serialize_document(detail, collab_id)
 
-    @router.post(
+    @secured_router.post(
         "/api/documents",
         response_model=DocumentResponse,
         status_code=status.HTTP_201_CREATED,
@@ -161,7 +161,7 @@ def create_api_router(
         collab_id = collaboration_id_store.get_or_create(detail.document.path.value)
         return serialize_document(detail, collab_id)
 
-    @router.patch("/api/documents", response_model=DocumentResponse, tags=["documents"])
+    @secured_router.patch("/api/documents", response_model=DocumentResponse, tags=["documents"])
     async def update_document(
         request: UpdateDocumentRequest,
         path: str = Query(...),
@@ -176,13 +176,15 @@ def create_api_router(
         collab_id = collaboration_id_store.get_or_create(detail.document.path.value)
         return serialize_document(detail, collab_id)
 
-    @router.delete("/api/documents", status_code=status.HTTP_204_NO_CONTENT, tags=["documents"])
+    @secured_router.delete(
+        "/api/documents", status_code=status.HTTP_204_NO_CONTENT, tags=["documents"]
+    )
     async def delete_document(path: str = Query(...)) -> Response:
         service.delete_document(path)
         collaboration_id_store.delete(path)
         return Response(status_code=status.HTTP_204_NO_CONTENT)
 
-    @router.get(
+    @secured_router.get(
         "/api/rooms/{collaboration_id}/status",
         response_model=RoomStatusResponse,
         tags=["rooms"],
@@ -191,7 +193,7 @@ def create_api_router(
         result = await collaboration_handler.check_room_status(collaboration_id)
         return RoomStatusResponse(**result)
 
-    @router.post(
+    @secured_router.post(
         "/api/rooms/{collaboration_id}/initialize",
         response_model=InitializeRoomResponse,
         tags=["rooms"],
@@ -211,4 +213,5 @@ def create_api_router(
         result = await collaboration_handler.initialize_room(collaboration_id, seed)
         return InitializeRoomResponse(**result)
 
+    router.include_router(secured_router)
     return router

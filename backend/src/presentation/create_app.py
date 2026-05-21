@@ -115,6 +115,13 @@ def create_app() -> FastAPI:
 
     @app.websocket("/api/documents/yjs/{collaboration_id}")
     async def document_websocket(websocket: WebSocket, collaboration_id: str) -> None:
+        token = websocket.query_params.get("token")
+        try:
+            auth_service.get_current_principal(token)
+        except Exception:
+            await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+            return
+
         await collaboration_handler.handle_document_websocket(websocket, collaboration_id)
 
     @app.exception_handler(InvalidPathError)

@@ -33,11 +33,16 @@ export function resolveBaseUrl() {
 }
 
 export async function customInstance<T>(url: string, options?: RequestInit): Promise<T> {
+  const token =
+    typeof window !== 'undefined' ? window.localStorage.getItem('seneschal.auth.token') : null;
+  const headers = new Headers(options?.headers);
+  if (token) {
+    headers.set('Authorization', `Bearer ${token}`);
+  }
+
   const response = await fetch(new URL(url, resolveBaseUrl()), {
     ...options,
-    headers: {
-      ...(options?.headers ?? {}),
-    },
+    headers,
   });
 
   const contentType = response.headers.get('content-type') ?? '';
@@ -56,6 +61,15 @@ export async function customInstance<T>(url: string, options?: RequestInit): Pro
       typeof payload.detail === 'string'
         ? payload.detail
         : `Request failed with status ${response.status}`;
+
+    if (response.status === 401 && !url.includes('/api/auth/login')) {
+      if (typeof window !== 'undefined') {
+        window.localStorage.removeItem('seneschal.auth.token');
+        if (window.location.pathname !== '/auth') {
+          window.location.replace('/auth');
+        }
+      }
+    }
 
     throw new ApiError(detail, response.status, payload);
   }

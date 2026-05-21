@@ -16,10 +16,6 @@ export type LoginResponse = {
 
 const TOKEN_KEY = 'seneschal.auth.token';
 
-function authHeader(token: string): RequestInit {
-  return { headers: { Authorization: `Bearer ${token}` } };
-}
-
 export function getStoredAuthToken() {
   if (typeof window === 'undefined') return null;
   return window.localStorage.getItem(TOKEN_KEY);
@@ -40,18 +36,18 @@ export async function login(username: string, password: string): Promise<LoginRe
   return response.data as LoginResponse;
 }
 
-export async function logout(token: string): Promise<void> {
-  await logoutApiAuthLogoutPost(authHeader(token));
+export async function logout(): Promise<void> {
+  await logoutApiAuthLogoutPost();
 }
 
-export async function getProfile(token: string): Promise<AdminProfileResponse> {
-  const response = await getProfileApiAuthMeGet(authHeader(token));
+export async function getProfile(): Promise<AdminProfileResponse> {
+  const response = await getProfileApiAuthMeGet();
   if (response.status !== 200) throw new Error('Failed to get profile');
   return response.data as AdminProfileResponse;
 }
 
-export async function listUsers(token: string): Promise<UserResponse[]> {
-  const response = await getUsersApiUsersGet(authHeader(token));
+export async function listUsers(): Promise<UserResponse[]> {
+  const response = await getUsersApiUsersGet();
   if (response.status !== 200) throw new Error('Failed to list users');
   return response.data as UserResponse[];
 }
