@@ -1,12 +1,10 @@
 from __future__ import annotations
 
 import base64
-import token
 from typing import Annotated
 
 from fastapi import APIRouter, HTTPException, Header, Query, Response, status
 
-from backend.src.application import auth_service
 from src.application.auth_service import AuthService
 from src.application.collaboration_id_store import CollaborationIdStore
 from src.application.document_management_service import DocumentManagementService
