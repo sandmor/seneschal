@@ -91,7 +91,9 @@ class SqlRoleRepository:
         for u in self._session.query(UserModel).all():
             roles = [Role(id=r.id, name=r.name) for r in u.roles]
             users.append(
-                User(id=u.id, username=u.username, email=u.email, is_active=u.is_active, roles=roles)
+                User(
+                    id=u.id, username=u.username, email=u.email, is_active=u.is_active, roles=roles
+                )
             )
         return users
 
@@ -127,4 +129,3 @@ class SqlRoleRepository:
 def get_role_repository() -> Iterator[RoleRepository]:
     with get_session() as s:
         yield SqlRoleRepository(s)
-
