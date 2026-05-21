@@ -78,7 +78,7 @@ export function DocumentEditor({
                 {i > 0 && <span className="text-border">/</span>}
                 <button
                   type="button"
-                  className="hover:text-foreground truncate"
+                  className="hover:text-foreground truncate transition-colors"
                   onClick={() => onNavigateToDirectory(crumb.path)}
                 >
                   {i === 0 ? 'Root' : crumb.label}
@@ -122,7 +122,7 @@ export function DocumentEditor({
       </div>
 
       {/* Rich Editor */}
-      <div className="flex flex-col flex-1 overflow-hidden min-h-0">
+      <div className="flex flex-col flex-1 overflow-hidden min-h-0 animate-in fade-in zoom-in-[0.99] duration-300">
         <RichEditor
           key={editorKey}
           initialContent={document.content}

@@ -61,7 +61,7 @@ export function Sidebar({
                   <button
                     type="button"
                     className={cn(
-                      'group flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-sm transition-colors',
+                      'group flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-sm transition-all duration-200 active:scale-[0.98]',
                       isActive
                         ? 'bg-accent text-accent-foreground font-medium'
                         : 'text-muted-foreground hover:bg-secondary hover:text-foreground',
@@ -88,7 +88,7 @@ export function Sidebar({
           <button
             type="button"
             onClick={() => setAdminOpen(true)}
-            className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-sm text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+            className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-sm text-muted-foreground transition-all duration-200 active:scale-[0.98] hover:bg-secondary hover:text-foreground"
           >
             <ShieldIcon className="h-3.5 w-3.5 shrink-0 opacity-60" />
             <span>Admin console</span>
@@ -106,7 +106,7 @@ export function Sidebar({
             <button
               type="button"
               onClick={toggleTheme}
-              className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+              className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-all duration-200 active:scale-[0.98] hover:bg-secondary hover:text-foreground"
               aria-label={theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'}
               id="theme-toggle"
             >
@@ -120,7 +120,7 @@ export function Sidebar({
               type="button"
               onClick={handleSignOut}
               disabled={signingOut}
-              className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-secondary hover:text-destructive"
+              className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-all duration-200 active:scale-[0.98] hover:bg-secondary hover:text-destructive"
               aria-label="Sign out"
               title="Sign out"
             >

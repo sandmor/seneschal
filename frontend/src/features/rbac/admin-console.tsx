@@ -50,13 +50,22 @@ export function AdminConsole({ open, onClose }: AdminConsoleProps) {
     void refreshAll();
   }, [open]);
 
-  if (!open) return null;
-
   return (
     <>
-      <div className="fixed inset-0 z-40 bg-black/40 backdrop-blur-[2px]" onClick={onClose} />
+      <div
+        className={cn(
+          'fixed inset-0 z-40 bg-black/40 backdrop-blur-[2px] transition-opacity duration-200',
+          open ? 'opacity-100' : 'pointer-events-none opacity-0',
+        )}
+        onClick={onClose}
+      />
 
-      <div className="fixed inset-y-0 right-0 z-50 flex w-full max-w-3xl flex-col border-l border-border bg-card shadow-2xl">
+      <div
+        className={cn(
+          'fixed inset-y-0 right-0 z-50 flex w-full max-w-3xl flex-col border-l border-border bg-card shadow-2xl transition-transform duration-300 ease-out',
+          open ? 'translate-x-0' : 'translate-x-full',
+        )}
+      >
         <header className="flex h-14 shrink-0 items-center justify-between border-b border-border px-6">
           <div className="flex items-center gap-3">
             <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary/10">
@@ -70,7 +79,7 @@ export function AdminConsole({ open, onClose }: AdminConsoleProps) {
           <button
             type="button"
             onClick={onClose}
-            className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+            className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-all duration-200 active:scale-[0.98] hover:bg-secondary hover:text-foreground"
           >
             <CloseIcon className="h-3.5 w-3.5" />
           </button>
