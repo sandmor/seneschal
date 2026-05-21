@@ -192,16 +192,14 @@ function LoginView({
             Role-based access control for your documents. Sign in to access your workspace.
           </p>
           <div className="space-y-3 pt-4">
-            {['Role-based permissions', 'Document version control', 'Real-time collaboration'].map(
-              (feature) => (
-                <div key={feature} className="flex items-center gap-3">
-                  <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary/20">
-                    <CheckIcon className="h-3 w-3 text-primary" />
-                  </div>
-                  <span className="text-sm text-background/60">{feature}</span>
+            {['Role-based permissions', 'Real-time collaboration'].map((feature) => (
+              <div key={feature} className="flex items-center gap-3">
+                <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary/20">
+                  <CheckIcon className="h-3 w-3 text-primary" />
                 </div>
-              ),
-            )}
+                <span className="text-sm text-background/60">{feature}</span>
+              </div>
+            ))}
           </div>
         </div>
 
