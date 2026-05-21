@@ -1,8 +1,10 @@
 from __future__ import annotations
+
 import os
 from pathlib import Path
+
 from sqlalchemy import create_engine
-from sqlalchemy.orm import DeclarativeBase, Session
+from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
 DB_URL = os.getenv("DATABASE_URL", "sqlite:///./data/seneschal.db")
 
@@ -17,6 +19,7 @@ def _resolve_db_path() -> Path | None:
 
 
 engine = create_engine(DB_URL, connect_args={"check_same_thread": False})
+SessionLocal = sessionmaker(bind=engine, class_=Session, expire_on_commit=False)
 
 
 class Base(DeclarativeBase):
@@ -24,7 +27,7 @@ class Base(DeclarativeBase):
 
 
 def get_session() -> Session:
-    return Session(engine)
+    return SessionLocal()
 
 
 def init_db() -> None:
@@ -32,6 +35,6 @@ def init_db() -> None:
     if db_path is not None:
         db_path.parent.mkdir(parents=True, exist_ok=True)  # crea data/ si no existe
 
-    from src.adapters import role_repository  # noqa: F401 - registra los modelos
+    from src.adapters import role_repository  # noqa: F401 - registers SQLAlchemy models
 
     Base.metadata.create_all(engine)

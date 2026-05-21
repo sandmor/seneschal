@@ -1,10 +1,11 @@
 from __future__ import annotations
 
-import secrets
 from dataclasses import dataclass
 
-from src.application.token_store import TokenStore
-from src.domain.auth_entities import AdminProfile
+from src.application.password_hasher_port import PasswordHasherPort
+from src.application.token_provider_port import TokenProviderPort
+from src.application.user_repository import UserRepository
+from src.domain.auth_entities import AuthenticatedPrincipal
 from src.domain.domain_errors import InvalidCredentialsError
 
 
@@ -12,23 +13,38 @@ from src.domain.domain_errors import InvalidCredentialsError
 class AuthService:
     admin_username: str
     admin_password: str
-    token_store: TokenStore
+    token_provider: TokenProviderPort
+    user_repository: UserRepository
+    password_hasher: PasswordHasherPort
 
     def login(self, username: str, password: str) -> str:
-        if username != self.admin_username or password != self.admin_password:
+        if username == self.admin_username and password == self.admin_password:
+            return self.token_provider.generate_access_token(
+                subject=username,
+                user_id=1,
+                roles=["superadmin"],
+                is_superadmin=True,
+            )
+
+        account = self.user_repository.get_by_username(username)
+        if account is None or not account.is_active:
             raise InvalidCredentialsError("Invalid credentials.")
 
-        token = secrets.token_urlsafe(32)
-        self.token_store.add(token)
-        return token
+        if not self.password_hasher.verify_password(password, account.password_hash):
+            raise InvalidCredentialsError("Invalid credentials.")
+
+        return self.token_provider.generate_access_token(
+            subject=account.username,
+            user_id=account.id,
+            roles=account.roles,
+            is_superadmin=False,
+        )
 
     def logout(self, token: str) -> None:
-        self.token_store.remove(token)
+        del token
 
-    def get_admin_profile(self) -> AdminProfile:
-        return AdminProfile(
-            id=1,
-            name=self.admin_username,
-            role="superadmin",
-            roles=["superadmin"],
-        )
+    def verify_token(self, token: str) -> bool:
+        return self.token_provider.is_valid(token)
+
+    def get_current_principal(self, token: str) -> AuthenticatedPrincipal:
+        return self.token_provider.extract_principal(token)

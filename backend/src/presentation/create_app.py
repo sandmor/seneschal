@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import logging
 import os
+import secrets
 from contextlib import asynccontextmanager
 from pathlib import Path
 from urllib.parse import urlsplit, urlunsplit
@@ -9,14 +11,17 @@ from dotenv import load_dotenv
 from fastapi import FastAPI, Request, WebSocket, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-import logging
+from pycrdt.websocket import WebsocketServer
 
 from src.adapters.database import init_db
-from src.adapters.in_memory_token_store import InMemoryTokenStore
+from src.adapters.jwt_token_adapter import JwtTokenAdapter
 from src.adapters.local_storage import LocalStorageAdapter
+from src.adapters.pbkdf2_password_hasher import Pbkdf2PasswordHasher
+from src.adapters.role_repository import create_role_repository, create_user_repository
 from src.application.auth_service import AuthService
 from src.application.collaboration_id_store import CollaborationIdStore
 from src.application.document_management_service import DocumentManagementService
+from src.application.role_management_service import RoleManagementService
 from src.application.user_service import UserService
 from src.domain.domain_errors import (
     DirectoryNotEmptyError,
@@ -25,13 +30,12 @@ from src.domain.domain_errors import (
     ResourceNotFoundError,
 )
 from src.presentation.api_router import create_api_router
+from src.presentation.role_router import create_role_router
 from src.presentation.websocket_handler import DocumentCollaborationHandler
-from pycrdt.websocket import WebsocketServer
 
 
 @asynccontextmanager
 async def _lifespan(_: FastAPI, websocket_server: WebsocketServer):
-    """Manage the application lifespan events, like starting the websocket server."""
     async with websocket_server:
         yield
 
@@ -39,15 +43,29 @@ async def _lifespan(_: FastAPI, websocket_server: WebsocketServer):
 def create_app() -> FastAPI:
     _load_root_env()
     init_db()
+
     storage = LocalStorageAdapter(_resolve_data_directory())
     service = DocumentManagementService(storage=storage)
-    _token_store = InMemoryTokenStore()
+
+    secret_key = os.getenv("JWT_SECRET_KEY") or secrets.token_urlsafe(32)
+    token_provider = JwtTokenAdapter(secret_key=secret_key)
+    password_hasher = Pbkdf2PasswordHasher()
+    user_repository = create_user_repository()
+    role_repository = create_role_repository()
+
     auth_service = AuthService(
         admin_username=os.getenv("ADMIN_USERNAME", "admin"),
         admin_password=os.getenv("ADMIN_PASSWORD", "admin123"),
-        token_store=_token_store,
+        token_provider=token_provider,
+        user_repository=user_repository,
+        password_hasher=password_hasher,
     )
-    user_service = UserService()
+    user_service = UserService(user_repository=user_repository)
+    role_management_service = RoleManagementService(
+        user_repository=user_repository,
+        role_repository=role_repository,
+        password_hasher=password_hasher,
+    )
     collaboration_id_store = CollaborationIdStore()
     websocket_server = WebsocketServer(auto_clean_rooms=False)
     collaboration_handler = DocumentCollaborationHandler(websocket_server)
@@ -81,11 +99,11 @@ def create_app() -> FastAPI:
             service,
             auth_service,
             user_service,
-            _token_store,
             collaboration_id_store,
             collaboration_handler,
         )
     )
+    app.include_router(create_role_router(auth_service, role_management_service))
 
     @app.middleware("http")
     async def log_request_url(request: Request, call_next):
@@ -127,6 +145,7 @@ def _build_allowed_origins() -> list[str]:
         f"http://127.0.0.1:{frontend_port}",
         f"http://localhost:{frontend_port}",
     ]
+
     if public_frontend_url:
         candidates.append(public_frontend_url)
         parsed = urlsplit(public_frontend_url)
@@ -135,8 +154,10 @@ def _build_allowed_origins() -> list[str]:
             candidates.append(
                 urlunsplit((parsed.scheme, f"{alternate_host}:{parsed.port}", parsed.path, "", ""))
             )
+
     extra_origins = os.getenv("EXTRA_ALLOWED_ORIGINS", "")
     candidates.extend(origin.strip() for origin in extra_origins.split(",") if origin.strip())
+
     return list(dict.fromkeys(candidates))
 
 

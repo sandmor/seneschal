@@ -1,18 +1,18 @@
 from __future__ import annotations
 
 from typing import Annotated, Literal
+from typing import TYPE_CHECKING
 
 from pydantic import BaseModel, Field, model_validator
 
-from src.domain.auth_entities import AdminProfile, User
+from src.domain.auth_entities import AuthenticatedPrincipal, User
 from src.domain.file_system_entities import (
     DirectoryDetail,
     DirectoryEntry,
     DocumentDetail,
     DocumentEntry,
 )
-
-from typing import TYPE_CHECKING
+from src.domain.role_entities import ManagedUser, Role
 
 if TYPE_CHECKING:
     from src.application.collaboration_id_store import CollaborationIdStore
@@ -88,7 +88,7 @@ class AdminProfileResponse(BaseModel):
     roles: list[str]
 
     @classmethod
-    def from_domain(cls, profile: AdminProfile) -> "AdminProfileResponse":
+    def from_domain(cls, profile: AuthenticatedPrincipal) -> "AdminProfileResponse":
         return cls(
             id=profile.id,
             name=profile.name,
@@ -105,6 +105,48 @@ class UserResponse(BaseModel):
     @classmethod
     def from_domain(cls, user: User) -> "UserResponse":
         return cls(id=user.id, name=user.name, roles=user.roles)
+
+
+class RoleRequest(BaseModel):
+    name: str
+    description: str = ""
+
+
+class RoleResponse(BaseModel):
+    id: int
+    name: str
+    description: str
+
+    @classmethod
+    def from_domain(cls, role: Role) -> "RoleResponse":
+        if role.id is None:
+            raise ValueError("Role must have an id before serialization.")
+
+        return cls(id=role.id, name=role.name, description=role.description)
+
+
+class CreateManagedUserRequest(BaseModel):
+    username: str
+    password: str
+
+
+class ManagedUserResponse(BaseModel):
+    id: int
+    username: str
+    is_active: bool
+    roles: list[RoleResponse]
+
+    @classmethod
+    def from_domain(cls, user: ManagedUser) -> "ManagedUserResponse":
+        if user.id is None:
+            raise ValueError("User must have an id before serialization.")
+
+        return cls(
+            id=user.id,
+            username=user.username,
+            is_active=user.is_active,
+            roles=[RoleResponse.from_domain(role) for role in user.roles],
+        )
 
 
 class RoomStatusResponse(BaseModel):
