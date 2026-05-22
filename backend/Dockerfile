@@ -1,6 +1,8 @@
 FROM ghcr.io/astral-sh/uv:python3.11-bookworm-slim
 WORKDIR /app
 
+RUN mkdir -p /app/logs
+
 COPY pyproject.toml uv.lock ./
 COPY backend/pyproject.toml backend/
 

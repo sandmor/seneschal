@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import os
 from pathlib import Path
 
@@ -9,6 +10,8 @@ from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
 _engine: Engine | None = None
 _session_factory: sessionmaker[Session] | None = None
+
+logger = logging.getLogger("seneschal.database")
 
 
 def _default_db_url() -> str:
@@ -34,6 +37,7 @@ def get_engine() -> Engine:
         db_url = get_database_url()
         connect_args = {"check_same_thread": False} if db_url.startswith("sqlite") else {}
         _engine = create_engine(db_url, connect_args=connect_args)
+        logger.info("Database engine created for %s", db_url)
     return _engine
 
 
@@ -53,10 +57,15 @@ def get_session() -> Session:
 
 
 def init_db() -> None:
-    db_path = _resolve_db_path(get_database_url())
+    db_url = get_database_url()
+    db_path = _resolve_db_path(db_url)
     if db_path is not None:
         db_path.parent.mkdir(parents=True, exist_ok=True)
+        logger.info("Database initialized at %s", db_path)
+    else:
+        logger.info("Database initialized (in-memory or non-SQLite)")
 
     from src.adapters import role_repository  # noqa: F401 - registers SQLAlchemy models
 
     Base.metadata.create_all(get_engine())
+    logger.info("Database tables created/verified")

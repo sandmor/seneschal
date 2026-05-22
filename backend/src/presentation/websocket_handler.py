@@ -8,8 +8,7 @@ from fastapi import WebSocket, WebSocketDisconnect
 from pycrdt import Channel
 from pycrdt.websocket import WebsocketServer
 
-
-logger = logging.getLogger("seneschal")
+logger = logging.getLogger("seneschal.websocket")
 
 
 class FastAPIWebsocket(Channel):

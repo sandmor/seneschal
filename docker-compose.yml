@@ -10,8 +10,11 @@ services:
       - PORT=${BACKEND_PORT:-8000}
       - PUBLIC_FRONTEND_URL=${PUBLIC_FRONTEND_URL:-http://localhost:3000}
       - DATA_DIRECTORY=/app/data
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - LOG_DIRECTORY=${LOG_DIRECTORY:-/app/logs}
     volumes:
       - backend-data:/app/data
+      - backend-logs:/app/logs
     networks:
       - app-network
 
@@ -37,3 +40,4 @@ networks:
 
 volumes:
   backend-data:
+  backend-logs:

@@ -12,6 +12,7 @@ frontend/dist/
 frontend/src/api/
 data/
 .seneschal/
+logs/
 
 .DS_Store
 *.log

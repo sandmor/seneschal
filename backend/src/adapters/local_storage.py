@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import shutil
 from pathlib import Path
 
@@ -17,13 +18,17 @@ from src.domain.file_system_entities import (
 )
 from src.domain.paths import AbsolutePath
 
+logger = logging.getLogger("seneschal.storage")
+
 
 class LocalStorageAdapter:
     def __init__(self, base_directory: Path) -> None:
         self._base_directory = base_directory
         self._base_directory.mkdir(parents=True, exist_ok=True)
+        logger.info("LocalStorageAdapter initialized at %s", self._base_directory)
 
     def read_directory(self, path: AbsolutePath) -> DirectoryDetail:
+        logger.debug("Read directory: %s", path.value)
         directory_path = self._require_existing_directory(path)
         directory_entry = self._build_directory_entry(path, directory_path)
 
@@ -41,6 +46,7 @@ class LocalStorageAdapter:
         return DirectoryDetail(directory=directory_entry, children=children)
 
     def read_document(self, path: AbsolutePath) -> DocumentDetail:
+        logger.debug("Read document: %s", path.value)
         document_path = self._require_existing_document(path)
         content = document_path.read_text(encoding="utf-8")
         document_entry = self._build_document_entry(path, document_path)
@@ -50,26 +56,32 @@ class LocalStorageAdapter:
         fs_path = self._fs_path_for(path)
 
         if fs_path.exists():
+            logger.warning("Directory already exists: %s", path.value)
             raise ResourceAlreadyExistsError(f"Directory '{path.value}' already exists.")
 
         parent_path = self._require_existing_directory(path.parent)
         if not parent_path.is_dir():
+            logger.warning("Parent directory not found: %s", path.parent.value)
             raise ResourceNotFoundError(f"Parent directory '{path.parent.value}' was not found.")
 
         fs_path.mkdir()
+        logger.info("Directory created: %s", path.value)
         return self.read_directory(path)
 
     def create_document(self, path: AbsolutePath, content: str) -> DocumentDetail:
         fs_path = self._fs_path_for(path)
 
         if fs_path.exists():
+            logger.warning("Document already exists: %s", path.value)
             raise ResourceAlreadyExistsError(f"Document '{path.value}' already exists.")
 
         self._require_existing_directory(path.parent)
         fs_path.write_text(content, encoding="utf-8")
+        logger.info("Document created: %s", path.value)
         return self.read_document(path)
 
     def update_document_content(self, path: AbsolutePath, content: str) -> DocumentDetail:
+        logger.debug("Update document content: %s", path.value)
         fs_path = self._require_existing_document(path)
         fs_path.write_text(content, encoding="utf-8")
         return self.read_document(path)
@@ -77,50 +89,62 @@ class LocalStorageAdapter:
     def move_directory(
         self, source_path: AbsolutePath, destination_path: AbsolutePath
     ) -> DirectoryDetail:
+        logger.debug("Move directory: %s -> %s", source_path.value, destination_path.value)
         source_fs_path = self._require_existing_directory(source_path)
         destination_fs_path = self._fs_path_for(destination_path)
 
         if destination_fs_path.exists():
+            logger.warning("Destination directory already exists: %s", destination_path.value)
             raise ResourceAlreadyExistsError(
                 f"Destination directory '{destination_path.value}' already exists."
             )
 
         self._require_existing_directory(destination_path.parent)
         source_fs_path.rename(destination_fs_path)
+        logger.info("Directory moved: %s -> %s", source_path.value, destination_path.value)
         return self.read_directory(destination_path)
 
     def move_document(
         self, source_path: AbsolutePath, destination_path: AbsolutePath
     ) -> DocumentDetail:
+        logger.debug("Move document: %s -> %s", source_path.value, destination_path.value)
         source_fs_path = self._require_existing_document(source_path)
         destination_fs_path = self._fs_path_for(destination_path)
 
         if destination_fs_path.exists():
+            logger.warning("Destination document already exists: %s", destination_path.value)
             raise ResourceAlreadyExistsError(
                 f"Destination document '{destination_path.value}' already exists."
             )
 
         self._require_existing_directory(destination_path.parent)
         source_fs_path.rename(destination_fs_path)
+        logger.info("Document moved: %s -> %s", source_path.value, destination_path.value)
         return self.read_document(destination_path)
 
     def delete_directory(self, path: AbsolutePath, recursive: bool) -> None:
+        logger.info("Delete directory: %s (recursive=%s)", path.value, recursive)
         fs_path = self._require_existing_directory(path)
 
         if recursive:
             shutil.rmtree(fs_path)
+            logger.info("Directory recursively deleted: %s", path.value)
             return
 
         try:
             fs_path.rmdir()
+            logger.info("Directory deleted: %s", path.value)
         except OSError as error:
+            logger.warning("Directory not empty: %s", path.value)
             raise DirectoryNotEmptyError(
                 f"Directory '{path.value}' is not empty; delete recursively to remove it."
             ) from error
 
     def delete_document(self, path: AbsolutePath) -> None:
+        logger.info("Delete document: %s", path.value)
         fs_path = self._require_existing_document(path)
         fs_path.unlink()
+        logger.info("Document deleted: %s", path.value)
 
     def _fs_path_for(self, path: AbsolutePath) -> Path:
         return self._base_directory.joinpath(*path.segments)

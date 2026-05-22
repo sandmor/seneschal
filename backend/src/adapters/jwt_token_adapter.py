@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from datetime import datetime, timedelta, timezone
 
 import jwt
@@ -12,6 +13,8 @@ from src.domain.domain_errors import InvalidCredentialsError
 # are supported. Currently set to 10 minutes as recommended.
 ACCESS_TOKEN_EXPIRE_MINUTES = 10
 ALGORITHM = "HS256"
+
+logger = logging.getLogger("seneschal.jwt")
 
 
 class JwtTokenAdapter:
@@ -44,7 +47,9 @@ class JwtTokenAdapter:
             "exp": datetime.now(timezone.utc) + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES),
             "iat": datetime.now(timezone.utc),
         }
-        return jwt.encode(payload, self._secret_key, algorithm=ALGORITHM)
+        token = jwt.encode(payload, self._secret_key, algorithm=ALGORITHM)
+        logger.debug("Generated access token for user %s", subject)
+        return token
 
     def is_valid(self, token: str) -> bool:
         try:
@@ -57,6 +62,7 @@ class JwtTokenAdapter:
         try:
             payload = jwt.decode(token, self._secret_key, algorithms=[ALGORITHM])
         except jwt.InvalidTokenError as error:
+            logger.warning("Invalid token: %s", error)
             raise InvalidCredentialsError("Invalid token.") from error
 
         roles = payload.get("roles")
@@ -70,6 +76,7 @@ class JwtTokenAdapter:
 
         normalized_roles = [str(role) for role in roles]
         normalized_permissions = [str(perm) for perm in permissions]
+        logger.debug("Extracted principal %s from token", payload.get("sub"))
         return AuthenticatedPrincipal(
             id=int(payload["user_id"]),
             username=str(payload["sub"]),
