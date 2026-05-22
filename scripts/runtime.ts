@@ -111,8 +111,8 @@ export async function waitForUrl(
   throw new Error(`Timed out waiting for ${url}`);
 }
 
-export async function fetchText(url: string) {
-  const response = await fetch(url);
+export async function fetchText(url: string, init?: RequestInit) {
+  const response = await fetch(url, init);
   if (!response.ok) {
     throw new Error(`Request to ${url} failed with status ${response.status}`);
   }

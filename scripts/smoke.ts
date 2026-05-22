@@ -19,9 +19,10 @@ import {
 type SmokeMode = 'local' | 'docker';
 type LoginResponse = { token: string };
 type AdminProfile = { name: string; role: string };
-type User = { id: number; name: string; roles: string[] };
 type Role = { id: number; name: string; description: string };
 type ManagedUser = { id: number; username: string; is_active: boolean; roles: Role[] };
+type PublicUser = { id: number; name: string; roles: string[]; permissions: string[] };
+type AuthorizationHeaders = { Authorization: string };
 
 const mode = parseMode(process.argv[2]);
 const adminUsername = baseEnv.ADMIN_USERNAME ?? 'admin';
@@ -91,8 +92,10 @@ async function runLocalSmoke() {
     try {
       await waitForUrl(`http://${host}:${frontendPort}/health`);
 
+      const authorizationHeaders = await loginAsAdmin(`http://${host}:${backendPort}`);
       const backendRootDirectory = await fetchText(
         `http://${host}:${backendPort}/api/directories?path=/`,
+        { headers: authorizationHeaders },
       );
       const frontendHtml = await fetchText(`http://${host}:${frontendPort}/`);
       const authHtml = await fetchText(`http://${host}:${frontendPort}/auth`);
@@ -100,7 +103,7 @@ async function runLocalSmoke() {
       assertIncludes(backendRootDirectory, '"kind":"directory"', 'backend root directory payload');
       assertIncludes(frontendHtml, '<title>Seneschal</title>', 'frontend HTML');
       assertIncludes(authHtml, 'Authentication', 'auth route HTML');
-      await exerciseAuthFlow(`http://${host}:${backendPort}`);
+      await exerciseAuthFlow(`http://${host}:${backendPort}`, authorizationHeaders);
     } finally {
       cleanupProcesses([frontend]);
     }
@@ -124,8 +127,10 @@ async function runDockerSmoke() {
       delayMs: 2000,
     });
 
+    const authorizationHeaders = await loginAsAdmin(`http://${host}:${backendPort}`);
     const backendRootDirectory = await fetchText(
       `http://${host}:${backendPort}/api/directories?path=/`,
+      { headers: authorizationHeaders },
     );
     const frontendHtml = await fetchText(`http://${host}:${frontendPort}/`);
     const authHtml = await fetchText(`http://${host}:${frontendPort}/auth`);
@@ -133,7 +138,7 @@ async function runDockerSmoke() {
     assertIncludes(backendRootDirectory, '"kind":"directory"', 'backend root directory payload');
     assertIncludes(frontendHtml, '<title>Seneschal</title>', 'frontend HTML');
     assertIncludes(authHtml, 'Authentication', 'auth route HTML');
-    await exerciseAuthFlow(`http://${host}:${backendPort}`);
+    await exerciseAuthFlow(`http://${host}:${backendPort}`, authorizationHeaders);
   } finally {
     await dockerCompose(['down', '--volumes', '--remove-orphans']);
   }
@@ -151,7 +156,7 @@ function parseMode(rawMode: string | undefined): SmokeMode {
   throw new Error(`Unsupported smoke mode '${rawMode}'. Expected local or docker.`);
 }
 
-async function exerciseAuthFlow(apiBaseUrl: string) {
+async function loginAsAdmin(apiBaseUrl: string): Promise<AuthorizationHeaders> {
   const login = await fetchJson<LoginResponse>(`${apiBaseUrl}/api/auth/login`, {
     method: 'POST',
     headers: {
@@ -163,14 +168,19 @@ async function exerciseAuthFlow(apiBaseUrl: string) {
     }),
   });
 
-  const authorizationHeaders = {
+  return {
     Authorization: `Bearer ${login.token}`,
   };
+}
 
+async function exerciseAuthFlow(apiBaseUrl: string, authorizationHeaders: AuthorizationHeaders) {
+  const smokeRunId = Date.now().toString(36);
+  const roleName = `editor-${smokeRunId}`;
+  const username = `smoke-user-${smokeRunId}`;
   const profile = await fetchJson<AdminProfile>(`${apiBaseUrl}/api/auth/me`, {
     headers: authorizationHeaders,
   });
-  const users = await fetchJson<User[]>(`${apiBaseUrl}/api/users`, {
+  const usersBefore = await fetchJson<PublicUser[]>(`${apiBaseUrl}/api/users`, {
     headers: authorizationHeaders,
   });
   const createdRole = await fetchJson<Role>(`${apiBaseUrl}/api/admin/roles`, {
@@ -180,7 +190,7 @@ async function exerciseAuthFlow(apiBaseUrl: string) {
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
-      name: 'editor',
+      name: roleName,
       description: 'Can edit content',
     }),
   });
@@ -191,7 +201,7 @@ async function exerciseAuthFlow(apiBaseUrl: string) {
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
-      username: 'smoke-user',
+      username,
       password: 'smoke-password',
     }),
   });
@@ -203,6 +213,9 @@ async function exerciseAuthFlow(apiBaseUrl: string) {
     headers: authorizationHeaders,
   });
   const managedRoles = await fetchJson<Role[]>(`${apiBaseUrl}/api/admin/roles`, {
+    headers: authorizationHeaders,
+  });
+  const usersAfter = await fetchJson<PublicUser[]>(`${apiBaseUrl}/api/users`, {
     headers: authorizationHeaders,
   });
   const logout = await fetchJson<{ status: string }>(`${apiBaseUrl}/api/auth/logout`, {
@@ -222,13 +235,11 @@ async function exerciseAuthFlow(apiBaseUrl: string) {
     );
   }
 
-  if (users.length !== 0) {
-    throw new Error(
-      `Expected /api/users to be empty before creating app users, received ${users.length}.`,
-    );
+  if (!usersBefore.every((user) => Array.isArray(user.roles) && Array.isArray(user.permissions))) {
+    throw new Error('Expected /api/users to return users with roles and permissions arrays.');
   }
 
-  if (!managedRoles.some((role) => role.id === createdRole.id && role.name === 'editor')) {
+  if (!managedRoles.some((role) => role.id === createdRole.id && role.name === roleName)) {
     throw new Error('Expected created role to be returned by /api/admin/roles.');
   }
 
@@ -237,8 +248,21 @@ async function exerciseAuthFlow(apiBaseUrl: string) {
     throw new Error('Expected created user to be returned by /api/admin/users.');
   }
 
+  if (managedUser.username !== username) {
+    throw new Error(`Expected created username '${username}', received '${managedUser.username}'.`);
+  }
+
   if (!managedUser.roles.some((role) => role.id === createdRole.id)) {
     throw new Error('Expected assigned role to be present on created managed user.');
+  }
+
+  const publicUser = usersAfter.find((user) => user.id === createdUser.id);
+  if (!publicUser) {
+    throw new Error('Expected created user to be returned by /api/users.');
+  }
+
+  if (!publicUser.roles.includes(roleName)) {
+    throw new Error('Expected created role to be present on created public user.');
   }
 
   if (logout.status !== 'ok') {
