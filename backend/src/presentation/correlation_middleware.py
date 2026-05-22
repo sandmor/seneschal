@@ -15,9 +15,7 @@ class CorrelationIdMiddleware(BaseHTTPMiddleware):
     The ID is also echoed back in the response header ``X-Request-ID``.
     """
 
-    async def dispatch(
-        self, request: Request, call_next: RequestResponseEndpoint
-    ) -> Response:
+    async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
         header_cid = request.headers.get("X-Request-ID")
         cid = set_correlation_id(header_cid)
 

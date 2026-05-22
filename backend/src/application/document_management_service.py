@@ -96,9 +96,7 @@ class DocumentManagementService:
             destination_path = AbsolutePath.parse(raw_destination_path).ensure_document()
 
             if destination_path != document_path:
-                logger.info(
-                    "Move document: %s -> %s", document_path.value, destination_path.value
-                )
+                logger.info("Move document: %s -> %s", document_path.value, destination_path.value)
                 current_path = destination_path
                 self.storage.move_document(document_path, destination_path)
 
