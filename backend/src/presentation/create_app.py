@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-import logging
 import os
 import secrets
+import time
 from contextlib import asynccontextmanager
 from pathlib import Path
 from urllib.parse import urlsplit, urlunsplit
@@ -29,7 +29,9 @@ from src.domain.domain_errors import (
     ResourceAlreadyExistsError,
     ResourceNotFoundError,
 )
+from src.infrastructure.logging_config import configure_logging
 from src.presentation.api_router import create_api_router
+from src.presentation.correlation_middleware import CorrelationIdMiddleware
 from src.presentation.role_router import create_role_router
 from src.presentation.websocket_handler import DocumentCollaborationHandler
 
@@ -72,22 +74,17 @@ def create_app() -> FastAPI:
     websocket_server = WebsocketServer(auto_clean_rooms=False)
     collaboration_handler = DocumentCollaborationHandler(websocket_server)
 
+    logger = configure_logging()
+
     app = FastAPI(
         title="Seneschal API",
         summary="Document management API for directories, markdown documents, and authentication.",
         lifespan=lambda app: _lifespan(app, websocket_server),
     )
 
-    logger = logging.getLogger("seneschal")
-    logger.setLevel(logging.INFO)
-
-    handler = logging.StreamHandler()
-    formatter = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
-    handler.setFormatter(formatter)
-    logger.addHandler(handler)
-
     app.logger = logger
 
+    app.add_middleware(CorrelationIdMiddleware)
     app.add_middleware(
         CORSMiddleware,
         allow_origins=_build_allowed_origins(),
@@ -108,17 +105,34 @@ def create_app() -> FastAPI:
     app.include_router(create_role_router(auth_service, role_management_service))
 
     @app.middleware("http")
-    async def log_request_url(request: Request, call_next):
-        app.logger.info(f"Incoming request URL: {request.url}")
-        response = await call_next(request)
+    async def log_request(request: Request, call_next):
+        start = time.perf_counter()
+        logger.info("%s %s", request.method, request.url.path)
+        try:
+            response = await call_next(request)
+        except Exception:
+            logger.exception("Unhandled exception for %s %s", request.method, request.url.path)
+            raise
+        elapsed = (time.perf_counter() - start) * 1000
+        logger.info(
+            "Response %s for %s %s in %.2fms",
+            response.status_code,
+            request.method,
+            request.url.path,
+            elapsed,
+        )
         return response
 
     @app.websocket("/api/documents/yjs/{collaboration_id}")
     async def document_websocket(websocket: WebSocket, collaboration_id: str) -> None:
         token = websocket.query_params.get("token")
+        logger.info("WebSocket connection attempt for room %s", collaboration_id)
         try:
             auth_service.get_current_principal(token)
         except Exception:
+            logger.warning(
+                "WebSocket authentication failed for room %s", collaboration_id
+            )
             await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
             return
 

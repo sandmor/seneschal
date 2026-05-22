@@ -31,6 +31,23 @@ Default auth credentials:
 - Password: `admin123`
 - Override with `ADMIN_USERNAME` and `ADMIN_PASSWORD` in `.env`
 
+## Authentication
+
+The backend uses stateless JWT bearer tokens. On login, the backend returns a token that the frontend stores in `localStorage` and sends on every request via the `Authorization` header.
+
+- Set `JWT_SECRET_KEY` in `.env`. If omitted, a random key is generated on startup (this invalidates all existing tokens on restart).
+- Tokens expire after 10 minutes.
+- The default `admin` account is a superadmin that exists independently of the database. Additional users and roles can be managed through the admin console once logged in.
+
+## Logging
+
+The backend writes structured logs to both stdout and rotating files.
+
+- Log directory: `./logs` locally, `/app/logs` in Docker (persisted via the `backend-logs` volume)
+- Rotation: 10 MB per file, 5 backups retained
+- Every request is tagged with a correlation ID (`X-Request-ID`) that appears in all log lines for that request
+- Adjust verbosity with `LOG_LEVEL` (default `INFO`)
+
 ## Setup Without Docker
 
 Install Python and frontend dependencies:
