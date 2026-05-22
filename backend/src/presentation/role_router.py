@@ -112,9 +112,7 @@ def create_role_router(
     async def list_users() -> list[ManagedUserResponse]:
         users = role_management_service.list_users()
         logger.debug("Listed %d managed users", len(users))
-        return [
-            ManagedUserResponse.from_domain(user) for user in users
-        ]
+        return [ManagedUserResponse.from_domain(user) for user in users]
 
     @router.post("/users/{user_id}/roles/{role_id}", status_code=status.HTTP_204_NO_CONTENT)
     async def assign_role(user_id: int, role_id: int) -> None:

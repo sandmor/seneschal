@@ -130,9 +130,7 @@ def create_app() -> FastAPI:
         try:
             auth_service.get_current_principal(token)
         except Exception:
-            logger.warning(
-                "WebSocket authentication failed for room %s", collaboration_id
-            )
+            logger.warning("WebSocket authentication failed for room %s", collaboration_id)
             await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
             return
 
