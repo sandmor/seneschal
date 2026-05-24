@@ -3,6 +3,7 @@ import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { RichEditor } from '@/features/editor/rich-editor';
 import { cn } from '@/lib/utils';
+// Añadimos DownloadIcon si tu set de iconos lo permite, o puedes usar texto por ahora
 import { ArrowLeftIcon, TrashIcon } from '@/features/document-browser/icons';
 import type * as Y from 'yjs';
 import type { WebsocketProvider } from 'y-websocket';
@@ -23,7 +24,7 @@ export interface EditorDocument {
 export interface DocumentEditorProps {
   document: EditorDocument;
   documentName: string;
-  breadcrumbs: Breadcrumb[];
+  breadcrumbs: [] | Breadcrumb[]; // Ajustado flexibilidad tipado si aplica
   status: {
     message: string;
     tone: 'default' | 'error' | 'saving';
@@ -36,6 +37,7 @@ export interface DocumentEditorProps {
   onDocumentNameBlur: () => void;
   onDocumentContentChange: (content: string) => void;
   onDelete: () => void;
+  onExportPdf?: () => void; // <-- NUEVA PROP (Opcional para que no rompa si no se pasa de inmediato)
   onKeyDown?: (e: React.KeyboardEvent<HTMLInputElement>) => void;
   ydoc?: Y.Doc;
   provider?: WebsocketProvider;
@@ -58,6 +60,7 @@ export function DocumentEditor({
   onDocumentNameBlur,
   onDocumentContentChange,
   onDelete,
+  onExportPdf, // <-- TRAEMOS LA PROP
   onKeyDown,
   ydoc,
   provider,
@@ -99,6 +102,8 @@ export function DocumentEditor({
             <span className="text-xs text-muted-foreground shrink-0">.md</span>
           </div>
         </div>
+        
+        {/* LADO DERECHO DE LA BARRA (ACCIONES) */}
         <div className="flex items-center gap-3 shrink-0">
           {status && (
             <span
@@ -114,6 +119,17 @@ export function DocumentEditor({
               {status.message}
             </span>
           )}
+          
+          {/* BOTÓN EXPORTAR PDF */}
+          <Button 
+            variant="outline" 
+            size="sm" 
+            onClick={onExportPdf} 
+            disabled={isBusy}
+          >
+            Export PDF
+          </Button>
+
           <Button variant="destructive" size="sm" onClick={onDelete} disabled={isBusy}>
             <TrashIcon className="h-3.5 w-3.5 mr-1" />
             Delete
@@ -201,7 +217,7 @@ export function DocumentEditorSkeleton({ documentPath }: { documentPath: string 
 
       {/* Editor Content Area */}
       <div className="flex-1 p-8 space-y-8">
-        <Skeleton className="h-10 w-1/3" /> {/* Represents an H1 Title */}
+        <Skeleton className="h-10 w-1/3" />
         <div className="space-y-3">
           <Skeleton className="h-4 w-full" />
           <Skeleton className="h-4 w-[95%]" />
