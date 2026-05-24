@@ -579,17 +579,16 @@ export function ExplorerShell({ directoryPath, documentPath }: ExplorerShellProp
     deleteDocumentMutation.mutate(selectedDocument.path);
   };
 
-  
   const handleExportPDF = async () => {
     if (!selectedDocument) return;
     try {
-      const token = localStorage.getItem('token'); 
+      const token = localStorage.getItem('token');
       const url = `http://localhost:8000/api/documents/export-pdf?path=${encodeURIComponent(selectedDocument.path)}`;
 
       const response = await fetch(url, {
         method: 'GET',
-        headers: { 
-          'Authorization': `Bearer ${token}` 
+        headers: {
+          Authorization: `Bearer ${token}`,
         },
       });
 
@@ -605,8 +604,8 @@ export function ExplorerShell({ directoryPath, documentPath }: ExplorerShellProp
       link.remove();
       window.URL.revokeObjectURL(downloadUrl);
     } catch (error) {
-      console.error("Error exportando PDF:", error);
-      alert("No se pudo descargar el PDF.");
+      console.error('Error exportando PDF:', error);
+      alert('No se pudo descargar el PDF.');
     }
   };
 

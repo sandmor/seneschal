@@ -102,7 +102,7 @@ export function DocumentEditor({
             <span className="text-xs text-muted-foreground shrink-0">.md</span>
           </div>
         </div>
-        
+
         {/* LADO DERECHO DE LA BARRA (ACCIONES) */}
         <div className="flex items-center gap-3 shrink-0">
           {status && (
@@ -119,14 +119,9 @@ export function DocumentEditor({
               {status.message}
             </span>
           )}
-          
+
           {/* BOTÓN EXPORTAR PDF */}
-          <Button 
-            variant="outline" 
-            size="sm" 
-            onClick={onExportPdf} 
-            disabled={isBusy}
-          >
+          <Button variant="outline" size="sm" onClick={onExportPdf} disabled={isBusy}>
             Export PDF
           </Button>
 
