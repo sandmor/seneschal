@@ -582,8 +582,10 @@ export function ExplorerShell({ directoryPath, documentPath }: ExplorerShellProp
   const handleExportPDF = async () => {
     if (!selectedDocument) return;
     try {
-      const token = localStorage.getItem('token');
-      const url = `http://localhost:8000/api/documents/export-pdf?path=${encodeURIComponent(selectedDocument.path)}`;
+      const token = getStoredAuthToken();
+
+      const apiBaseUrl = import.meta.env.VITE_PUBLIC_API_URL || '';
+      const url = `${apiBaseUrl}/api/documents/export-pdf?path=${encodeURIComponent(selectedDocument.path)}`;
 
       const response = await fetch(url, {
         method: 'GET',
@@ -592,20 +594,21 @@ export function ExplorerShell({ directoryPath, documentPath }: ExplorerShellProp
         },
       });
 
-      if (!response.ok) throw new Error('Error al generar el PDF en el servidor');
+      if (!response.ok) throw new Error('Error generating PDF on the server');
 
       const blob = await response.blob();
       const downloadUrl = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = downloadUrl;
-      link.setAttribute('download', `${documentName || 'documento'}.pdf`);
+
+      link.setAttribute('download', `${documentName || 'document'}.pdf`);
       document.body.appendChild(link);
       link.click();
       link.remove();
       window.URL.revokeObjectURL(downloadUrl);
     } catch (error) {
-      console.error('Error exportando PDF:', error);
-      alert('No se pudo descargar el PDF.');
+      console.error('Error exporting PDF:', error);
+      alert('Could not download the PDF.');
     }
   };
 
