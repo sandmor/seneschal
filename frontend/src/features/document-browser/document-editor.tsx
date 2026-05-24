@@ -3,7 +3,6 @@ import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { RichEditor } from '@/features/editor/rich-editor';
 import { cn } from '@/lib/utils';
-// Añadimos DownloadIcon si tu set de iconos lo permite, o puedes usar texto por ahora
 import { ArrowLeftIcon, TrashIcon } from '@/features/document-browser/icons';
 import type * as Y from 'yjs';
 import type { WebsocketProvider } from 'y-websocket';
@@ -24,7 +23,7 @@ export interface EditorDocument {
 export interface DocumentEditorProps {
   document: EditorDocument;
   documentName: string;
-  breadcrumbs: [] | Breadcrumb[]; // Ajustado flexibilidad tipado si aplica
+  breadcrumbs: [] | Breadcrumb[];
   status: {
     message: string;
     tone: 'default' | 'error' | 'saving';
@@ -37,7 +36,7 @@ export interface DocumentEditorProps {
   onDocumentNameBlur: () => void;
   onDocumentContentChange: (content: string) => void;
   onDelete: () => void;
-  onExportPdf?: () => void; // <-- NUEVA PROP (Opcional para que no rompa si no se pasa de inmediato)
+  onExportPdf?: () => void;
   onKeyDown?: (e: React.KeyboardEvent<HTMLInputElement>) => void;
   ydoc?: Y.Doc;
   provider?: WebsocketProvider;
@@ -60,7 +59,7 @@ export function DocumentEditor({
   onDocumentNameBlur,
   onDocumentContentChange,
   onDelete,
-  onExportPdf, // <-- TRAEMOS LA PROP
+  onExportPdf,
   onKeyDown,
   ydoc,
   provider,
@@ -103,7 +102,7 @@ export function DocumentEditor({
           </div>
         </div>
 
-        {/* LADO DERECHO DE LA BARRA (ACCIONES) */}
+        {/* Toolbar actions */}
         <div className="flex items-center gap-3 shrink-0">
           {status && (
             <span
@@ -120,7 +119,7 @@ export function DocumentEditor({
             </span>
           )}
 
-          {/* BOTÓN EXPORTAR PDF */}
+          {/* Export PDF Button */}
           <Button variant="outline" size="sm" onClick={onExportPdf} disabled={isBusy}>
             Export PDF
           </Button>

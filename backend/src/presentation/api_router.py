@@ -201,8 +201,11 @@ def create_api_router(
         collaboration_id_store.delete(path)
         return Response(status_code=status.HTTP_204_NO_CONTENT)
 
-    @router.get("/api/documents/export-pdf", tags=["documents"])
-    async def export_document_pdf(path: str = Query(...)) -> Response:
+    @secured_router.get("/api/documents/export-pdf", tags=["documents"])
+    async def export_document_pdf(
+        path: str = Query(...),
+        principal: AuthenticatedPrincipal = Depends(require_current_principal),
+    ) -> Response:
         from src.application.pdf_service import generate_pdf
 
         detail = service.get_document(path)
