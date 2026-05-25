@@ -19,6 +19,24 @@ import {
 
 type Tab = 'roles' | 'users' | 'permissions';
 
+const PERMISSION_OPTIONS = [
+  {
+    value: 'files:read',
+    label: 'files:read',
+    description: 'View directories, documents, and collaborative sessions.',
+  },
+  {
+    value: 'files:write',
+    label: 'files:write',
+    description: 'Create, edit, move, and delete files and folders.',
+  },
+  {
+    value: 'admin',
+    label: 'admin',
+    description: 'Access the administration console and role management.',
+  },
+] as const;
+
 type AdminConsoleProps = {
   open: boolean;
   onClose: () => void;
@@ -307,25 +325,33 @@ function RolesTab({
               Permissions
             </label>
             <div className="flex flex-wrap gap-2">
-              <button
-                type="button"
-                onClick={() =>
-                  setForm((current) => ({
-                    ...current,
-                    permissions: current.permissions.includes('admin')
-                      ? current.permissions.filter((p) => p !== 'admin')
-                      : [...current.permissions, 'admin'],
-                  }))
-                }
-                className={cn(
-                  'rounded-md border px-2.5 py-1 text-xs transition-colors',
-                  form.permissions.includes('admin')
-                    ? 'border-primary bg-primary text-primary-foreground'
-                    : 'border-border bg-background text-muted-foreground hover:border-primary/50 hover:text-foreground',
-                )}
-              >
-                admin
-              </button>
+              {PERMISSION_OPTIONS.map((permission) => {
+                const isEnabled = form.permissions.includes(permission.value);
+
+                return (
+                  <button
+                    key={permission.value}
+                    type="button"
+                    onClick={() =>
+                      setForm((current) => ({
+                        ...current,
+                        permissions: current.permissions.includes(permission.value)
+                          ? current.permissions.filter((p) => p !== permission.value)
+                          : [...current.permissions, permission.value],
+                      }))
+                    }
+                    className={cn(
+                      'rounded-md border px-2.5 py-1 text-xs transition-colors',
+                      isEnabled
+                        ? 'border-primary bg-primary text-primary-foreground'
+                        : 'border-border bg-background text-muted-foreground hover:border-primary/50 hover:text-foreground',
+                    )}
+                    title={permission.description}
+                  >
+                    {permission.label}
+                  </button>
+                );
+              })}
             </div>
           </div>
           <div className="flex justify-end gap-2">
@@ -588,55 +614,60 @@ function UsersTab({
 }
 
 function PermissionsTab({ roles }: { roles: Role[] }) {
-  const adminRoles = roles.filter((role) => role.permissions?.includes('admin'));
+  const groupedPermissions = PERMISSION_OPTIONS.map((permission) => ({
+    ...permission,
+    roles: roles.filter((role) => role.permissions?.includes(permission.value)),
+  }));
 
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <div>
           <h3 className="font-heading text-base font-semibold text-foreground">Permissions</h3>
-          <p className="text-xs text-muted-foreground">Available system privileges</p>
+          <p className="text-xs text-muted-foreground">
+            Roles can combine file read/write access with administration rights.
+          </p>
         </div>
       </div>
 
       <div className="space-y-2">
-        <div className="rounded-lg border border-border bg-background p-4">
-          <div className="flex items-start justify-between gap-3">
-            <div className="min-w-0">
-              <div className="flex items-center gap-2">
-                <span className="text-sm font-semibold text-foreground">admin</span>
-                <Badge variant="outline" className="text-[10px]">
-                  System
-                </Badge>
-              </div>
-              <p className="mt-1 text-xs text-muted-foreground">
-                Grants full access to the administration console and all system configurations.
-              </p>
+        {groupedPermissions.map((permission) => (
+          <div key={permission.value} className="rounded-lg border border-border bg-background p-4">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-semibold text-foreground">{permission.label}</span>
+                  <Badge variant="outline" className="text-[10px]">
+                    System
+                  </Badge>
+                </div>
+                <p className="mt-1 text-xs text-muted-foreground">{permission.description}</p>
 
-              <div className="mt-4">
-                <p className="mb-2 text-[11px] font-medium text-muted-foreground">
-                  Roles with this permission
-                </p>
-                {adminRoles.length === 0 ? (
-                  <p className="text-xs italic text-muted-foreground/70">None</p>
-                ) : (
-                  <div className="flex flex-wrap gap-1">
-                    {adminRoles.map((role) => (
-                      <Badge key={role.id} variant="secondary" className="text-[10px]">
-                        {role.name}
-                      </Badge>
-                    ))}
-                  </div>
-                )}
+                <div className="mt-4">
+                  <p className="mb-2 text-[11px] font-medium text-muted-foreground">
+                    Roles with this permission
+                  </p>
+                  {permission.roles.length === 0 ? (
+                    <p className="text-xs italic text-muted-foreground/70">None</p>
+                  ) : (
+                    <div className="flex flex-wrap gap-1">
+                      {permission.roles.map((role) => (
+                        <Badge key={role.id} variant="secondary" className="text-[10px]">
+                          {role.name}
+                        </Badge>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
-            </div>
-            <div className="flex shrink-0">
-              <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10">
-                <ShieldIcon className="h-4 w-4 text-primary" />
-              </span>
+              <div className="flex shrink-0">
+                <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10">
+                  <ShieldIcon className="h-4 w-4 text-primary" />
+                </span>
+              </div>
             </div>
           </div>
-        </div>
+        ))}
       </div>
     </div>
   );

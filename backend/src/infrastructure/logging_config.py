@@ -7,6 +7,7 @@ import uuid
 from contextvars import ContextVar
 
 correlation_id_var: ContextVar[str] = ContextVar("correlation_id", default="-")
+actor_var: ContextVar[str] = ContextVar("actor", default="anonymous")
 
 
 class CorrelationIdFilter(logging.Filter):
@@ -14,6 +15,7 @@ class CorrelationIdFilter(logging.Filter):
 
     def filter(self, record: logging.LogRecord) -> bool:
         record.correlation_id = correlation_id_var.get()
+        record.actor = actor_var.get()
         return True
 
 
@@ -52,7 +54,7 @@ def configure_logging(
         return logger
 
     formatter = logging.Formatter(
-        "%(asctime)s | %(levelname)-8s | %(correlation_id)s | %(name)s | %(message)s",
+        "%(asctime)s | %(levelname)-8s | %(correlation_id)s | %(actor)s | %(name)s | %(message)s",
         datefmt="%Y-%m-%d %H:%M:%S",
     )
 
@@ -91,3 +93,15 @@ def set_correlation_id(cid: str | None = None) -> str:
     new_id = cid or str(uuid.uuid4())
     correlation_id_var.set(new_id)
     return new_id
+
+
+def get_actor() -> str:
+    """Return the current actor name or ``anonymous`` if none is set."""
+    return actor_var.get()
+
+
+def set_actor(actor: str | None = None) -> str:
+    """Set the current actor name and return it."""
+    normalized_actor = (actor or "anonymous").strip() or "anonymous"
+    actor_var.set(normalized_actor)
+    return normalized_actor

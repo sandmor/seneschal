@@ -18,6 +18,7 @@ from src.adapters.jwt_token_adapter import JwtTokenAdapter
 from src.adapters.local_storage import LocalStorageAdapter
 from src.adapters.pbkdf2_password_hasher import Pbkdf2PasswordHasher
 from src.adapters.role_repository import create_role_repository, create_user_repository
+from src.application.access_control import can_write_files
 from src.application.auth_service import AuthService
 from src.application.collaboration_id_store import CollaborationIdStore
 from src.application.document_management_service import DocumentManagementService
@@ -30,6 +31,7 @@ from src.domain.domain_errors import (
     ResourceNotFoundError,
 )
 from src.infrastructure.logging_config import configure_logging
+from src.infrastructure.logging_config import configure_logging, set_actor
 from src.presentation.api_router import create_api_router
 from src.presentation.correlation_middleware import CorrelationIdMiddleware
 from src.presentation.role_router import create_role_router
@@ -107,28 +109,49 @@ def create_app() -> FastAPI:
     @app.middleware("http")
     async def log_request(request: Request, call_next):
         start = time.perf_counter()
-        logger.info("%s %s", request.method, request.url.path)
+
+        actor = "anonymous"
+        authorization = request.headers.get("authorization")
+        if authorization:
+            scheme, _, token = authorization.partition(" ")
+            if scheme.lower() == "bearer" and token:
+                try:
+                    actor = auth_service.get_current_principal(token).username
+                except Exception:
+                    actor = "invalid-token"
+
+        set_actor(actor)
         try:
+            logger.info("%s %s", request.method, request.url.path)
             response = await call_next(request)
+            elapsed = (time.perf_counter() - start) * 1000
+            logger.info(
+                "Response %s for %s %s in %.2fms",
+                response.status_code,
+                request.method,
+                request.url.path,
+                elapsed,
+            )
+            return response
         except Exception:
             logger.exception("Unhandled exception for %s %s", request.method, request.url.path)
             raise
-        elapsed = (time.perf_counter() - start) * 1000
-        logger.info(
-            "Response %s for %s %s in %.2fms",
-            response.status_code,
-            request.method,
-            request.url.path,
-            elapsed,
-        )
-        return response
+        finally:
+            set_actor("anonymous")
 
     @app.websocket("/api/documents/yjs/{collaboration_id}")
     async def document_websocket(websocket: WebSocket, collaboration_id: str) -> None:
         token = websocket.query_params.get("token")
         logger.info("WebSocket connection attempt for room %s", collaboration_id)
         try:
-            auth_service.get_current_principal(token)
+            principal = auth_service.get_current_principal(token)
+            if not can_write_files(principal):
+                logger.warning(
+                    "WebSocket authentication failed for room %s: insufficient permissions",
+                    collaboration_id,
+                )
+                await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+                return
         except Exception:
             logger.warning("WebSocket authentication failed for room %s", collaboration_id)
             await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
