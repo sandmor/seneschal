@@ -154,9 +154,7 @@ def create_api_router(
             collaboration_id_store=collaboration_id_store,
         )
 
-    @write_router.patch(
-        "/api/directories", response_model=DirectoryResponse, tags=["directories"]
-    )
+    @write_router.patch("/api/directories", response_model=DirectoryResponse, tags=["directories"])
     async def update_directory(
         request: UpdateDirectoryRequest,
         path: str = Query(...),
