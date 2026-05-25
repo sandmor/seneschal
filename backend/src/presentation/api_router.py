@@ -315,8 +315,10 @@ def create_api_router(
     ) -> Response:
         from src.application.pdf_service import generate_pdf
 
+        logger.info("Export document as PDF: %s", path)
         detail = service.get_document(path)
         title = detail.document.path.name
+        logger.info("Generating PDF for document: %s (title=%s)", path, title)
         pdf_bytes = await generate_pdf(detail.content, title=title)
         return Response(
             content=pdf_bytes,

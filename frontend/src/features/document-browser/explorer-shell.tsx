@@ -42,6 +42,7 @@ import {
 import { createYjsProvider } from '@/features/editor/yjs-provider';
 import { getStoredAuthToken } from '@/features/auth/auth-api';
 import { cn } from '@/lib/utils';
+import { resolveBaseUrl } from '@/lib/orval-client';
 
 export type ExplorerShellProps = {
   directoryPath: string;
@@ -587,8 +588,10 @@ export function ExplorerShell({ directoryPath, documentPath }: ExplorerShellProp
     try {
       const token = getStoredAuthToken();
 
-      const apiBaseUrl = import.meta.env.VITE_PUBLIC_API_URL || '';
-      const url = `${apiBaseUrl}/api/documents/export-pdf?path=${encodeURIComponent(selectedDocument.path)}`;
+      const url = new URL(
+        `/api/documents/export-pdf?path=${encodeURIComponent(selectedDocument.path)}`,
+        resolveBaseUrl(),
+      );
 
       const response = await fetch(url, {
         method: 'GET',

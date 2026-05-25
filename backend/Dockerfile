@@ -8,6 +8,9 @@ COPY backend/pyproject.toml backend/
 
 RUN uv sync --frozen --no-dev
 
+ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
+RUN uv run --package backend playwright install --with-deps chromium
+
 COPY backend/ backend/
 
 ARG PORT=8000
