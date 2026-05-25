@@ -65,6 +65,7 @@ def init_db() -> None:
     else:
         logger.info("Database initialized (in-memory or non-SQLite)")
 
+    from src.adapters import access_control_repository  # noqa: F401 - registers SQLAlchemy models
     from src.adapters import role_repository  # noqa: F401 - registers SQLAlchemy models
 
     Base.metadata.create_all(get_engine())

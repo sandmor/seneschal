@@ -13,23 +13,30 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pycrdt.websocket import WebsocketServer
 
+from src.adapters.access_control_repository import create_access_control_repository
 from src.adapters.database import init_db
 from src.adapters.jwt_token_adapter import JwtTokenAdapter
 from src.adapters.local_storage import LocalStorageAdapter
 from src.adapters.pbkdf2_password_hasher import Pbkdf2PasswordHasher
 from src.adapters.role_repository import create_role_repository, create_user_repository
+from src.application.access_control_service import AccessControlService
 from src.application.auth_service import AuthService
 from src.application.collaboration_id_store import CollaborationIdStore
 from src.application.document_management_service import DocumentManagementService
 from src.application.role_management_service import RoleManagementService
 from src.application.user_service import UserService
+from src.domain.access_control import AccessLevel
 from src.domain.domain_errors import (
+    AccessDeniedError,
     DirectoryNotEmptyError,
     InvalidPathError,
     ResourceAlreadyExistsError,
     ResourceNotFoundError,
 )
+from src.domain.file_system_entities import NodeKind
+from src.domain.paths import AbsolutePath
 from src.infrastructure.logging_config import configure_logging
+from src.presentation.access_control_router import create_access_control_router
 from src.presentation.api_router import create_api_router
 from src.presentation.correlation_middleware import CorrelationIdMiddleware
 from src.presentation.role_router import create_role_router
@@ -57,6 +64,7 @@ def create_app() -> FastAPI:
     password_hasher = Pbkdf2PasswordHasher()
     user_repository = create_user_repository()
     role_repository = create_role_repository()
+    access_control_repository = create_access_control_repository()
     auth_service = AuthService(
         admin_username=os.getenv("ADMIN_USERNAME", "admin"),
         admin_password=os.getenv("ADMIN_PASSWORD", "admin123"),
@@ -70,6 +78,7 @@ def create_app() -> FastAPI:
         role_repository=role_repository,
         password_hasher=password_hasher,
     )
+    access_control_service = AccessControlService(repository=access_control_repository)
     collaboration_id_store = CollaborationIdStore()
     websocket_server = WebsocketServer(auto_clean_rooms=False)
     collaboration_handler = DocumentCollaborationHandler(websocket_server)
@@ -98,11 +107,13 @@ def create_app() -> FastAPI:
             service,
             auth_service,
             user_service,
+            access_control_service,
             collaboration_id_store,
             collaboration_handler,
         )
     )
     app.include_router(create_role_router(auth_service, role_management_service))
+    app.include_router(create_access_control_router(auth_service, access_control_service))
 
     @app.middleware("http")
     async def log_request(request: Request, call_next):
@@ -128,13 +139,38 @@ def create_app() -> FastAPI:
         token = websocket.query_params.get("token")
         logger.info("WebSocket connection attempt for room %s", collaboration_id)
         try:
-            auth_service.get_current_principal(token)
+            principal = auth_service.get_current_principal(token)
         except Exception:
             logger.warning("WebSocket authentication failed for room %s", collaboration_id)
             await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
             return
 
-        await collaboration_handler.handle_document_websocket(websocket, collaboration_id)
+        document_path = collaboration_id_store.get_path(collaboration_id)
+        if document_path is None:
+            logger.warning("WebSocket access denied: unknown collaboration id %s", collaboration_id)
+            await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+            return
+
+        try:
+            access_level = access_control_service.get_effective_access(
+                principal=principal,
+                path=AbsolutePath.parse(document_path).ensure_document(),
+                kind=NodeKind.DOCUMENT,
+            )
+            if access_level == AccessLevel.NONE:
+                raise AccessDeniedError("No access")
+        except AccessDeniedError:
+            logger.warning(
+                "WebSocket access denied for %s (user=%s)",
+                document_path,
+                principal.username,
+            )
+            await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+            return
+
+        await collaboration_handler.handle_document_websocket(
+            websocket, collaboration_id, access_level.value
+        )
 
     @app.exception_handler(InvalidPathError)
     async def handle_invalid_path(_: Request, error: InvalidPathError) -> JSONResponse:
@@ -151,6 +187,10 @@ def create_app() -> FastAPI:
     @app.exception_handler(DirectoryNotEmptyError)
     async def handle_directory_not_empty(_: Request, error: DirectoryNotEmptyError) -> JSONResponse:
         return _error_response(status.HTTP_409_CONFLICT, str(error))
+
+    @app.exception_handler(AccessDeniedError)
+    async def handle_access_denied(_: Request, error: AccessDeniedError) -> JSONResponse:
+        return _error_response(status.HTTP_403_FORBIDDEN, str(error))
 
     return app
 

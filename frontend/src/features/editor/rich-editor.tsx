@@ -49,6 +49,7 @@ export type RichEditorProps = {
   autofocus?: boolean;
   ydoc?: Y.Doc;
   provider?: WebsocketProvider;
+  readOnly?: boolean;
 };
 
 type PresenceUser = {
@@ -151,6 +152,7 @@ export function RichEditor({
   autofocus = false,
   ydoc,
   provider,
+  readOnly,
 }: RichEditorProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const editorSurfaceRef = useRef<HTMLDivElement>(null);
@@ -158,6 +160,10 @@ export function RichEditor({
   const [editorState, setEditorState] = useState<EditorState | null>(null);
   const [presenceItems, setPresenceItems] = useState<PresenceOverlayItem[]>([]);
   const onChangeRef = useRef(onChange);
+  const readOnlyRef = useRef(readOnly);
+  useEffect(() => {
+    readOnlyRef.current = readOnly;
+  }, [readOnly]);
   onChangeRef.current = onChange;
 
   useEffect(() => {
@@ -207,6 +213,7 @@ export function RichEditor({
     let presenceBinding: { destroy: () => void; schedule: () => void } | undefined;
 
     const view = new EditorView(containerRef.current, {
+      editable: () => !readOnlyRef.current,
       state,
       dispatchTransaction(this: EditorView, transaction) {
         const newState = this.state.apply(transaction);

@@ -14,6 +14,7 @@ class CollaborationIdStore:
 
     def __init__(self) -> None:
         self._path_to_id: dict[str, str] = {}
+        self._id_to_path: dict[str, str] = {}
         self._lock = Lock()
 
     def get_or_create(self, path: str) -> str:
@@ -23,7 +24,13 @@ class CollaborationIdStore:
             if collaboration_id is None:
                 collaboration_id = uuid.uuid4().hex
                 self._path_to_id[path] = collaboration_id
+                self._id_to_path[collaboration_id] = path
             return collaboration_id
+
+    def get_path(self, collaboration_id: str) -> str | None:
+        """Return the document path for *collaboration_id*, if any."""
+        with self._lock:
+            return self._id_to_path.get(collaboration_id)
 
     def rename(self, old_path: str, new_path: str) -> None:
         """Transfer the collaboration UUID from *old_path* to *new_path*."""
@@ -31,6 +38,7 @@ class CollaborationIdStore:
             collaboration_id = self._path_to_id.pop(old_path, None)
             if collaboration_id is not None:
                 self._path_to_id[new_path] = collaboration_id
+                self._id_to_path[collaboration_id] = new_path
 
     def rename_directory(self, old_dir_path: str, new_dir_path: str) -> None:
         """Transfer collaboration UUIDs for all documents within a directory."""
@@ -43,12 +51,16 @@ class CollaborationIdStore:
             keys_to_update = [k for k in self._path_to_id.keys() if k.startswith(old_dir_path)]
             for old_key in keys_to_update:
                 new_key = new_dir_path + old_key[len(old_dir_path) :]
-                self._path_to_id[new_key] = self._path_to_id.pop(old_key)
+                collaboration_id = self._path_to_id.pop(old_key)
+                self._path_to_id[new_key] = collaboration_id
+                self._id_to_path[collaboration_id] = new_key
 
     def delete(self, path: str) -> None:
         """Remove the collaboration UUID for *path*, if any."""
         with self._lock:
-            self._path_to_id.pop(path, None)
+            collaboration_id = self._path_to_id.pop(path, None)
+            if collaboration_id is not None:
+                self._id_to_path.pop(collaboration_id, None)
 
     def delete_directory(self, dir_path: str) -> None:
         """Remove the collaboration UUIDs for all documents within a directory."""
@@ -58,4 +70,6 @@ class CollaborationIdStore:
         with self._lock:
             keys_to_delete = [k for k in self._path_to_id.keys() if k.startswith(dir_path)]
             for key in keys_to_delete:
-                self._path_to_id.pop(key, None)
+                collaboration_id = self._path_to_id.pop(key, None)
+                if collaboration_id is not None:
+                    self._id_to_path.pop(collaboration_id, None)

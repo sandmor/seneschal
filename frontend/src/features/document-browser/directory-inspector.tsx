@@ -1,3 +1,4 @@
+import { ItemAccessControl } from '@/features/rbac/item-access-control';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { DirectoryResponse } from '@/api/models';
@@ -49,6 +50,7 @@ export function DirectoryInspector({
           Delete
         </Button>
       </div>
+      <ItemAccessControl path={directory.path} kind="directory" readOnly={isRoot} />
     </div>
   );
 }

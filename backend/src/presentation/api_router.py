@@ -6,12 +6,16 @@ from typing import Annotated
 
 from fastapi import APIRouter, Header, HTTPException, Query, Response, status, Depends
 
+from src.application.access_control_service import AccessControlService
 from src.application.auth_service import AuthService
 from src.application.collaboration_id_store import CollaborationIdStore
 from src.application.document_management_service import DocumentManagementService
 from src.application.user_service import UserService
+from src.domain.access_control import AccessLevel
 from src.domain.auth_entities import AuthenticatedPrincipal
 from src.domain.domain_errors import InvalidCredentialsError
+from src.domain.file_system_entities import NodeKind
+from src.domain.paths import AbsolutePath
 from src.presentation.api_schemas import (
     AdminProfileResponse,
     CreateDirectoryRequest,
@@ -38,6 +42,7 @@ def create_api_router(
     service: DocumentManagementService,
     auth_service: AuthService,
     user_service: UserService,
+    access_control: AccessControlService,
     collaboration_id_store: CollaborationIdStore,
     collaboration_handler: DocumentCollaborationHandler,
 ) -> APIRouter:
@@ -71,6 +76,12 @@ def create_api_router(
             ) from error
 
     secured_router = APIRouter(dependencies=[Depends(require_current_principal)])
+
+    def parse_directory_path(raw_path: str) -> AbsolutePath:
+        return AbsolutePath.parse(raw_path).ensure_directory()
+
+    def parse_document_path(raw_path: str) -> AbsolutePath:
+        return AbsolutePath.parse(raw_path).ensure_document()
 
     @router.get("/health", tags=["system"])
     async def healthcheck() -> dict[str, str]:
@@ -111,10 +122,22 @@ def create_api_router(
         return [UserResponse.from_domain(user) for user in users]
 
     @secured_router.get("/api/directories", response_model=DirectoryResponse, tags=["directories"])
-    async def get_directory(path: str = Query(default="/")) -> DirectoryResponse:
+    async def get_directory(
+        path: str = Query(default="/"),
+        principal: AuthenticatedPrincipal = Depends(require_current_principal),
+    ) -> DirectoryResponse:
         logger.debug("Get directory: %s", path)
+        directory_path = parse_directory_path(path)
+        access_control.ensure_access(
+            principal=principal,
+            path=directory_path,
+            kind=NodeKind.DIRECTORY,
+            required=AccessLevel.READ,
+        )
+        detail = service.get_directory(path)
+        detail = access_control.filter_directory(detail, principal)
         return serialize_directory(
-            service.get_directory(path),
+            detail,
             collaboration_id_store=collaboration_id_store,
         )
 
@@ -124,8 +147,18 @@ def create_api_router(
         status_code=status.HTTP_201_CREATED,
         tags=["directories"],
     )
-    async def create_directory(request: CreateDirectoryRequest) -> DirectoryResponse:
+    async def create_directory(
+        request: CreateDirectoryRequest,
+        principal: AuthenticatedPrincipal = Depends(require_current_principal),
+    ) -> DirectoryResponse:
         logger.info("Create directory: %s", request.path)
+        directory_path = parse_directory_path(request.path)
+        access_control.ensure_access(
+            principal=principal,
+            path=directory_path.parent,
+            kind=NodeKind.DIRECTORY,
+            required=AccessLevel.WRITE,
+        )
         return serialize_directory(
             service.create_directory(request.path),
             collaboration_id_store=collaboration_id_store,
@@ -137,8 +170,23 @@ def create_api_router(
     async def update_directory(
         request: UpdateDirectoryRequest,
         path: str = Query(...),
+        principal: AuthenticatedPrincipal = Depends(require_current_principal),
     ) -> DirectoryResponse:
         logger.info("Rename directory: %s -> %s", path, request.new_path)
+        source_path = parse_directory_path(path)
+        destination_path = parse_directory_path(request.new_path)
+        access_control.ensure_access(
+            principal=principal,
+            path=source_path,
+            kind=NodeKind.DIRECTORY,
+            required=AccessLevel.WRITE,
+        )
+        access_control.ensure_access(
+            principal=principal,
+            path=destination_path.parent,
+            kind=NodeKind.DIRECTORY,
+            required=AccessLevel.WRITE,
+        )
         collaboration_id_store.rename_directory(path, request.new_path)
         return serialize_directory(
             service.rename_directory(path, request.new_path),
@@ -151,18 +199,41 @@ def create_api_router(
     async def delete_directory(
         path: str = Query(...),
         recursive: bool = Query(default=False),
+        principal: AuthenticatedPrincipal = Depends(require_current_principal),
     ) -> Response:
         logger.info("Delete directory: %s (recursive=%s)", path, recursive)
+        directory_path = parse_directory_path(path)
+        access_control.ensure_access(
+            principal=principal,
+            path=directory_path,
+            kind=NodeKind.DIRECTORY,
+            required=AccessLevel.WRITE,
+        )
         service.delete_directory(path, recursive=recursive)
         collaboration_id_store.delete_directory(path)
         return Response(status_code=status.HTTP_204_NO_CONTENT)
 
     @secured_router.get("/api/documents", response_model=DocumentResponse, tags=["documents"])
-    async def get_document(path: str = Query(...)) -> DocumentResponse:
+    async def get_document(
+        path: str = Query(...),
+        principal: AuthenticatedPrincipal = Depends(require_current_principal),
+    ) -> DocumentResponse:
         logger.debug("Get document: %s", path)
+        document_path = parse_document_path(path)
+        access_control.ensure_access(
+            principal=principal,
+            path=document_path,
+            kind=NodeKind.DOCUMENT,
+            required=AccessLevel.READ,
+        )
+        access_level = access_control.get_effective_access(
+            principal=principal,
+            path=document_path,
+            kind=NodeKind.DOCUMENT,
+        )
         detail = service.get_document(path)
         collab_id = collaboration_id_store.get_or_create(path)
-        return serialize_document(detail, collab_id)
+        return serialize_document(detail, collab_id, access_level)
 
     @secured_router.post(
         "/api/documents",
@@ -170,18 +241,44 @@ def create_api_router(
         status_code=status.HTTP_201_CREATED,
         tags=["documents"],
     )
-    async def create_document(request: CreateDocumentRequest) -> DocumentResponse:
+    async def create_document(
+        request: CreateDocumentRequest,
+        principal: AuthenticatedPrincipal = Depends(require_current_principal),
+    ) -> DocumentResponse:
         logger.info("Create document: %s", request.path)
+        document_path = parse_document_path(request.path)
+        access_control.ensure_access(
+            principal=principal,
+            path=document_path.parent,
+            kind=NodeKind.DIRECTORY,
+            required=AccessLevel.WRITE,
+        )
         detail = service.create_document(request.path, request.content)
         collab_id = collaboration_id_store.get_or_create(detail.document.path.value)
-        return serialize_document(detail, collab_id)
+        return serialize_document(detail, collab_id, AccessLevel.WRITE)
 
     @secured_router.patch("/api/documents", response_model=DocumentResponse, tags=["documents"])
     async def update_document(
         request: UpdateDocumentRequest,
         path: str = Query(...),
+        principal: AuthenticatedPrincipal = Depends(require_current_principal),
     ) -> DocumentResponse:
         logger.info("Update document: %s", path)
+        document_path = parse_document_path(path)
+        access_control.ensure_access(
+            principal=principal,
+            path=document_path,
+            kind=NodeKind.DOCUMENT,
+            required=AccessLevel.WRITE,
+        )
+        if request.new_path and request.new_path != path:
+            destination_path = parse_document_path(request.new_path)
+            access_control.ensure_access(
+                principal=principal,
+                path=destination_path.parent,
+                kind=NodeKind.DIRECTORY,
+                required=AccessLevel.WRITE,
+            )
         if request.new_path and request.new_path != path:
             collaboration_id_store.rename(path, request.new_path)
         detail = service.update_document(
@@ -190,13 +287,23 @@ def create_api_router(
             raw_destination_path=request.new_path,
         )
         collab_id = collaboration_id_store.get_or_create(detail.document.path.value)
-        return serialize_document(detail, collab_id)
+        return serialize_document(detail, collab_id, AccessLevel.WRITE)
 
     @secured_router.delete(
         "/api/documents", status_code=status.HTTP_204_NO_CONTENT, tags=["documents"]
     )
-    async def delete_document(path: str = Query(...)) -> Response:
+    async def delete_document(
+        path: str = Query(...),
+        principal: AuthenticatedPrincipal = Depends(require_current_principal),
+    ) -> Response:
         logger.info("Delete document: %s", path)
+        document_path = parse_document_path(path)
+        access_control.ensure_access(
+            principal=principal,
+            path=document_path,
+            kind=NodeKind.DOCUMENT,
+            required=AccessLevel.WRITE,
+        )
         service.delete_document(path)
         collaboration_id_store.delete(path)
         return Response(status_code=status.HTTP_204_NO_CONTENT)
