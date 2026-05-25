@@ -1,0 +1,47 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <style>
+    :root {
+      /* Light Theme Variables */
+      --bg-color: oklch(0.975 0.006 75);
+      --primary-color: oklch(0.44 0.07 187);
+      --accent-color: oklch(0.94 0.025 187);
+      --text-color: oklch(0.985 0.003 80);
+    }
+    
+    /* Native OS/Browser Dark Mode Detection */
+    @media (prefers-color-scheme: dark) {
+      :root {
+        /* Dark Theme Variables */
+        --bg-color: oklch(0.16 0.01 260);
+        --primary-color: oklch(0.58 0.09 187);
+        --accent-color: oklch(0.28 0.03 187);
+        --text-color: oklch(0.12 0.01 260);
+      }
+    }
+
+    .bg-block {
+      fill: var(--accent-color);
+    }
+    
+    .fg-block {
+      fill: var(--primary-color);
+      stroke: var(--bg-color);
+      stroke-width: 6px;
+      /* Ensures sharp corners on the outer stroke */
+      stroke-linejoin: round; 
+    }
+    
+    .text-d {
+      fill: var(--text-color);
+      /* Standard web-safe fallbacks added for native favicon rendering */
+      font-family: 'Playfair Display Variable', 'Playfair Display', Georgia, serif;
+      font-weight: 700;
+    }
+  </style>
+  
+  <rect x="15" y="10" width="40" height="75" rx="12" class="bg-block" />
+  
+  <rect x="35" y="40" width="55" height="50" rx="12" class="fg-block" />
+  
+  <text x="62.5" y="76" font-size="36" text-anchor="middle" class="text-d">D</text>
+</svg>
