@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ExplorerRow } from '@/features/document-browser/explorer-row';
 import { DirectoryInspector } from '@/features/document-browser/directory-inspector';
+import { DocumentInspector } from '@/features/document-browser/document-inspector';
 import {
   DocumentEditor,
   DocumentEditorSkeleton,
@@ -81,6 +82,7 @@ export function ExplorerShell({ directoryPath, documentPath }: ExplorerShellProp
   const [ydoc, setYdoc] = useState<Y.Doc | undefined>(undefined);
   const [provider, setProvider] = useState<WebsocketProvider | undefined>(undefined);
   const [isYjsSynced, setIsYjsSynced] = useState(false);
+  const [isReadOnly, setIsReadOnly] = useState(false);
   const yjsCleanupRef = useRef<(() => void) | null>(null);
 
   const directoryQuery = useQuery({
@@ -198,6 +200,7 @@ export function ExplorerShell({ directoryPath, documentPath }: ExplorerShellProp
       setDocumentName(stripMarkdownExtension(selectedDocument.name));
       setDocumentContent(selectedDocument.content);
       hasUnsavedChangesRef.current = false;
+      setIsReadOnly(selectedDocument.access_level === 'read');
       unsavedChangesTimestampRef.current = null;
       lastSeenSaveIdRef.current = null;
       setBlacklistedLeaderIds(new Set());
@@ -207,7 +210,7 @@ export function ExplorerShell({ directoryPath, documentPath }: ExplorerShellProp
 
   // Auto-save: content changes
   useEffect(() => {
-    if (!selectedDocument || !hasUnsavedChangesRef.current) return;
+    if (!selectedDocument || !hasUnsavedChangesRef.current || isReadOnly) return;
 
     // Save Leader Election: only the client with the lowest clientID saves to the backend
     if (provider) {
@@ -685,36 +688,34 @@ export function ExplorerShell({ directoryPath, documentPath }: ExplorerShellProp
   }
 
   // Editor mode: full window
-  if (documentPath && selectedDocument && isYjsSynced) {
-    return (
-      <AppShell sidebar={sidebarContent}>
-        <DocumentEditor
-          document={selectedDocument}
-          documentName={documentName}
-          breadcrumbs={breadcrumbs}
-          status={status}
-          isBusy={isBusy}
-          editorKey={editorKey}
-          onBack={handleBackToExplorer}
-          onNavigateToDirectory={handleOpenDirectory}
-          onDocumentNameChange={handleDocumentNameChange}
-          onDocumentNameBlur={handleDocumentNameBlur}
-          onDocumentContentChange={handleDocumentContentChange}
-          onDelete={handleDeleteDocument}
-          onExportPdf={handleExportPDF}
-          onKeyDown={(e) => e.key === 'Enter' && e.currentTarget.blur()}
-          ydoc={ydoc}
-          provider={provider}
-        />
-      </AppShell>
-    );
-  }
+  const editorView = documentPath && selectedDocument && isYjsSynced && (
+    <DocumentEditor
+      document={selectedDocument}
+      documentName={documentName}
+      breadcrumbs={breadcrumbs}
+      status={status}
+      isBusy={isBusy}
+      editorKey={editorKey}
+      onBack={handleBackToExplorer}
+      onNavigateToDirectory={handleOpenDirectory}
+      onDocumentNameChange={handleDocumentNameChange}
+      onDocumentNameBlur={handleDocumentNameBlur}
+      onDocumentContentChange={handleDocumentContentChange}
+      onDelete={handleDeleteDocument}
+      onExportPdf={handleExportPDF}
+      onOpenSettings={() => setInspectorOpen(true)}
+      onKeyDown={(e) => e.key === 'Enter' && e.currentTarget.blur()}
+      ydoc={ydoc}
+      provider={provider}
+      readOnly={isReadOnly}
+    />
+  );
 
   // Explorer mode
-  const showDirInspector = !selectedDocument && currentDirectory && currentDirectory.path !== '/';
+  const showDirInspector = !selectedDocument && currentDirectory;
 
-  return (
-    <AppShell sidebar={sidebarContent}>
+  const explorerView = (
+    <>
       {/* Toolbar */}
       <div className="flex flex-col gap-3 border-b border-border bg-background px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-6">
         <div className="min-w-0">
@@ -826,10 +827,21 @@ export function ExplorerShell({ directoryPath, documentPath }: ExplorerShellProp
           />
         )}
       </div>
+    </>
+  );
 
-      {/* Inspector panel - only for directories now */}
-      <InspectorPanel open={inspectorOpen} onClose={closeInspector} title="Directory controls">
-        {currentDirectory && currentDirectory.path !== '/' ? (
+  return (
+    <AppShell sidebar={sidebarContent}>
+      {editorView ?? explorerView}
+
+      <InspectorPanel
+        open={inspectorOpen}
+        onClose={closeInspector}
+        title={documentPath ? 'Document settings' : 'Directory settings'}
+      >
+        {documentPath && selectedDocument ? (
+          <DocumentInspector document={selectedDocument} readOnly={isReadOnly} />
+        ) : currentDirectory ? (
           <DirectoryInspector
             directory={currentDirectory}
             directoryName={directoryName}

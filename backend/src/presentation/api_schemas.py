@@ -5,12 +5,14 @@ from typing import TYPE_CHECKING
 
 from pydantic import BaseModel, Field, model_validator
 
+from src.domain.access_control import AccessLevel, AccessOverride
 from src.domain.auth_entities import AuthenticatedPrincipal, User
 from src.domain.file_system_entities import (
     DirectoryDetail,
     DirectoryEntry,
     DocumentDetail,
     DocumentEntry,
+    NodeKind,
 )
 from src.domain.role_entities import ManagedUser, Role
 
@@ -45,6 +47,7 @@ class DirectoryResponse(DirectoryNodeResponse):
 
 class DocumentResponse(DocumentNodeResponse):
     content: str
+    access_level: AccessLevel
 
 
 class CreateDirectoryRequest(BaseModel):
@@ -132,6 +135,29 @@ class RoleResponse(BaseModel):
         )
 
 
+class AccessOverrideRequest(BaseModel):
+    path: str
+    kind: NodeKind
+    default_access: AccessLevel | None = None
+    role_overrides: dict[str, AccessLevel] = Field(default_factory=dict)
+
+
+class AccessOverrideResponse(BaseModel):
+    path: str
+    kind: NodeKind
+    default_access: AccessLevel | None
+    role_overrides: dict[str, AccessLevel]
+
+    @classmethod
+    def from_domain(cls, override: AccessOverride) -> "AccessOverrideResponse":
+        return cls(
+            path=override.path.value,
+            kind=override.kind,
+            default_access=override.default_access,
+            role_overrides=override.role_overrides,
+        )
+
+
 class CreateManagedUserRequest(BaseModel):
     username: str
     password: str
@@ -207,6 +233,10 @@ def serialize_directory(
     return DirectoryResponse(**directory.model_dump(), children=children)
 
 
-def serialize_document(detail: DocumentDetail, collaboration_id: str) -> DocumentResponse:
+def serialize_document(
+    detail: DocumentDetail, collaboration_id: str, access_level: AccessLevel
+) -> DocumentResponse:
     document = serialize_document_entry(detail.document, collaboration_id)
-    return DocumentResponse(**document.model_dump(), content=detail.content)
+    return DocumentResponse(
+        **document.model_dump(), content=detail.content, access_level=access_level
+    )

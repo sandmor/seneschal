@@ -14,9 +14,10 @@ logger = logging.getLogger("seneschal.websocket")
 class FastAPIWebsocket(Channel):
     """Wrapper to make FastAPI's WebSocket compatible with pycrdt-websocket Channel."""
 
-    def __init__(self, websocket: WebSocket, collaboration_id: str) -> None:
+    def __init__(self, websocket: WebSocket, collaboration_id: str, access_level: str) -> None:
         self._websocket = websocket
         self._collaboration_id = collaboration_id
+        self._access_level = access_level
         self._send_lock = Lock()
         super().__init__()
 
@@ -38,8 +39,19 @@ class FastAPIWebsocket(Channel):
 
     async def __anext__(self) -> bytes:
         try:
-            message = await self.recv()
-            return message
+            # TODO: This is a hack, we need to figure out if pycrdt has a better way to handle read-only clients
+            # that still need to receive updates but shouldn't be able to send SYNC_STEP2 or SYNC_UPDATE messages.
+            # For now, we just filter them out here, but ideally this would be handled at a lower level in the library.
+            while True:
+                message = await self.recv()
+
+                # Check for YMessageType.SYNC (0)
+                if len(message) >= 2 and message[0] == 0:
+                    # YSyncMessageType.SYNC_STEP2 (1) or YSyncMessageType.SYNC_UPDATE (2)
+                    if message[1] in (1, 2) and self._access_level == "read":
+                        continue
+
+                return message
         except WebSocketDisconnect:
             raise StopAsyncIteration()
 
@@ -88,6 +100,7 @@ class DocumentCollaborationHandler:
         self,
         websocket: WebSocket,
         collaboration_id: str,
+        access_level: str,
     ) -> None:
         """Handle a WebSocket connection for collaborative document editing."""
         await websocket.accept(subprotocol=_select_subprotocol(websocket))
@@ -101,9 +114,13 @@ class DocumentCollaborationHandler:
             await websocket.close(code=4001, reason="Room not initialized")
             return
 
-        logger.info("WebSocket connection accepted for collaboration_id: %s", collaboration_id)
+        logger.info(
+            "WebSocket connection accepted for collaboration_id: %s, access_level: %s",
+            collaboration_id,
+            access_level,
+        )
 
-        peer = FastAPIWebsocket(websocket, collaboration_id)
+        peer = FastAPIWebsocket(websocket, collaboration_id, access_level)
 
         await self._websocket_server.serve(peer)
 

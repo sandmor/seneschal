@@ -4,6 +4,8 @@ import { useTheme } from '@/providers/theme-provider';
 import { cn } from '@/lib/utils';
 import { AdminConsole } from '@/features/rbac/admin-console';
 import { logout, getStoredAuthToken, storeAuthToken } from '@/features/auth/auth-api';
+import { useGetProfileApiAuthMeGet } from '@/api/endpoints/api';
+import type { AdminProfileResponse } from '@/api/models/adminProfileResponse';
 
 type SidebarProps = {
   breadcrumbs?: { label: string; path: string }[];
@@ -23,6 +25,14 @@ export function Sidebar({
   const { theme, toggleTheme } = useTheme();
   const [adminOpen, setAdminOpen] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
+  const profileQuery = useGetProfileApiAuthMeGet();
+  const profile = profileQuery.data?.data as AdminProfileResponse | undefined;
+  const isAdmin = Boolean(
+    profile &&
+    (profile.permissions?.includes('admin') ||
+      profile.roles?.includes('admin') ||
+      profile.role === 'admin'),
+  );
   const navigate = useNavigate();
 
   const handleSignOut = async () => {
@@ -83,17 +93,19 @@ export function Sidebar({
 
         <div className="mx-3 h-px bg-border" />
 
-        {/* Admin console button */}
-        <div className="px-3 py-2">
-          <button
-            type="button"
-            onClick={() => setAdminOpen(true)}
-            className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-sm text-muted-foreground transition-all duration-200 active:scale-[0.98] hover:bg-secondary hover:text-foreground"
-          >
-            <ShieldIcon className="h-3.5 w-3.5 shrink-0 opacity-60" />
-            <span>Admin console</span>
-          </button>
-        </div>
+        {/* Admin console button (it should only be visible to admin users) */}
+        {isAdmin && (
+          <div className="px-3 py-2">
+            <button
+              type="button"
+              onClick={() => setAdminOpen(true)}
+              className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-sm text-muted-foreground transition-all duration-200 active:scale-[0.98] hover:bg-secondary hover:text-foreground"
+            >
+              <ShieldIcon className="h-3.5 w-3.5 shrink-0 opacity-60" />
+              <span>Admin console</span>
+            </button>
+          </div>
+        )}
 
         <div className="mx-3 h-px bg-border" />
 
@@ -130,7 +142,7 @@ export function Sidebar({
         </div>
       </nav>
 
-      <AdminConsole open={adminOpen} onClose={() => setAdminOpen(false)} />
+      {isAdmin && <AdminConsole open={adminOpen} onClose={() => setAdminOpen(false)} />}
     </>
   );
 }

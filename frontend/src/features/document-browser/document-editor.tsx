@@ -37,9 +37,11 @@ export interface DocumentEditorProps {
   onDocumentContentChange: (content: string) => void;
   onDelete: () => void;
   onExportPdf?: () => void;
+  onOpenSettings?: () => void;
   onKeyDown?: (e: React.KeyboardEvent<HTMLInputElement>) => void;
   ydoc?: Y.Doc;
   provider?: WebsocketProvider;
+  readOnly?: boolean;
 }
 
 /**
@@ -60,9 +62,11 @@ export function DocumentEditor({
   onDocumentContentChange,
   onDelete,
   onExportPdf,
+  onOpenSettings,
   onKeyDown,
   ydoc,
   provider,
+  readOnly,
 }: DocumentEditorProps) {
   return (
     <>
@@ -97,6 +101,7 @@ export function DocumentEditor({
               onBlur={onDocumentNameBlur}
               className="h-8 w-48 lg:w-64 text-sm font-medium bg-transparent border-0 px-0 focus-visible:ring-0 focus-visible:ring-offset-0"
               placeholder="Untitled"
+              disabled={readOnly}
             />
             <span className="text-xs text-muted-foreground shrink-0">.md</span>
           </div>
@@ -118,16 +123,22 @@ export function DocumentEditor({
               {status.message}
             </span>
           )}
-
           {/* Export PDF Button */}
           <Button variant="outline" size="sm" onClick={onExportPdf} disabled={isBusy}>
             Export PDF
           </Button>
 
-          <Button variant="destructive" size="sm" onClick={onDelete} disabled={isBusy}>
-            <TrashIcon className="h-3.5 w-3.5 mr-1" />
-            Delete
-          </Button>
+          {onOpenSettings && (
+            <Button variant="outline" size="sm" onClick={onOpenSettings} disabled={isBusy}>
+              Settings
+            </Button>
+          )}
+          {!readOnly && (
+            <Button variant="destructive" size="sm" onClick={onDelete} disabled={isBusy}>
+              <TrashIcon className="h-3.5 w-3.5 mr-1" />
+              Delete
+            </Button>
+          )}
         </div>
       </div>
 
@@ -141,6 +152,7 @@ export function DocumentEditor({
           className="flex-1"
           ydoc={ydoc}
           provider={provider}
+          readOnly={readOnly}
         />
       </div>
     </>

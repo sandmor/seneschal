@@ -20,3 +20,7 @@ class DirectoryNotEmptyError(DomainError):
 
 class InvalidCredentialsError(DomainError):
     """Raised when a login attempt uses unsupported credentials."""
+
+
+class AccessDeniedError(DomainError):
+    """Raised when a user attempts an action without sufficient access."""
