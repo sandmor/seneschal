@@ -5,6 +5,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, Header, HTTPException, status
 
+from src.application.access_control import can_manage_admin
 from src.application.auth_service import AuthService
 from src.application.role_management_service import RoleManagementService
 from src.domain.auth_entities import AuthenticatedPrincipal
@@ -51,7 +52,7 @@ def create_role_router(
                 headers={"WWW-Authenticate": "Bearer"},
             ) from error
 
-        if not principal.is_superadmin and "admin" not in principal.permissions:
+        if not can_manage_admin(principal):
             logger.warning(
                 "Admin access denied for user %s: insufficient permissions", principal.username
             )

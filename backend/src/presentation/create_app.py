@@ -18,6 +18,7 @@ from src.adapters.jwt_token_adapter import JwtTokenAdapter
 from src.adapters.local_storage import LocalStorageAdapter
 from src.adapters.pbkdf2_password_hasher import Pbkdf2PasswordHasher
 from src.adapters.role_repository import create_role_repository, create_user_repository
+from src.application.access_control import can_write_files
 from src.application.auth_service import AuthService
 from src.application.collaboration_id_store import CollaborationIdStore
 from src.application.document_management_service import DocumentManagementService
@@ -128,7 +129,14 @@ def create_app() -> FastAPI:
         token = websocket.query_params.get("token")
         logger.info("WebSocket connection attempt for room %s", collaboration_id)
         try:
-            auth_service.get_current_principal(token)
+            principal = auth_service.get_current_principal(token)
+            if not can_write_files(principal):
+                logger.warning(
+                    "WebSocket authentication failed for room %s: insufficient permissions",
+                    collaboration_id,
+                )
+                await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+                return
         except Exception:
             logger.warning("WebSocket authentication failed for room %s", collaboration_id)
             await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
