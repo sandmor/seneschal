@@ -24,3 +24,7 @@ class InvalidCredentialsError(DomainError):
 
 class AccessDeniedError(DomainError):
     """Raised when a user attempts an action without sufficient access."""
+
+
+class InvalidCollaborationSeedError(DomainError):
+    """Raised when a Yjs room seed cannot be applied."""

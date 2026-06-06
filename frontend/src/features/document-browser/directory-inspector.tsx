@@ -10,6 +10,8 @@ export function DirectoryInspector({
   directory,
   directoryName,
   isBusy,
+  readOnly,
+  showAccessControl,
   onDirectoryNameChange,
   onSave,
   onDelete,
@@ -17,11 +19,15 @@ export function DirectoryInspector({
   directory: DirectoryResponse;
   directoryName: string;
   isBusy: boolean;
+  readOnly?: boolean;
+  showAccessControl?: boolean;
   onDirectoryNameChange: (value: string) => void;
   onSave: () => void;
   onDelete: () => void;
 }) {
   const isRoot = directory.path === '/';
+  const isReadOnly = readOnly || isRoot;
+
   return (
     <div className="space-y-5">
       <div>
@@ -37,20 +43,28 @@ export function DirectoryInspector({
         <Input
           value={directoryName}
           onChange={(e) => onDirectoryNameChange(e.target.value)}
-          disabled={isRoot}
+          disabled={isReadOnly}
           placeholder="archive-branch"
         />
-        <p className="mt-2 text-xs text-muted-foreground">Root cannot be renamed or deleted.</p>
+        <p className="mt-2 text-xs text-muted-foreground">
+          {isRoot
+            ? 'Root cannot be renamed or deleted.'
+            : isReadOnly
+              ? 'You have read-only access to this directory.'
+              : 'Rename or delete this directory below.'}
+        </p>
       </div>
       <div className="flex gap-2">
-        <Button variant="secondary" size="sm" onClick={onSave} disabled={isBusy || isRoot}>
+        <Button variant="secondary" size="sm" onClick={onSave} disabled={isBusy || isReadOnly}>
           Save
         </Button>
-        <Button variant="destructive" size="sm" onClick={onDelete} disabled={isBusy || isRoot}>
+        <Button variant="destructive" size="sm" onClick={onDelete} disabled={isBusy || isReadOnly}>
           Delete
         </Button>
       </div>
-      <ItemAccessControl path={directory.path} kind="directory" readOnly={isRoot} />
+      {showAccessControl && (
+        <ItemAccessControl path={directory.path} kind="directory" readOnly={isReadOnly} />
+      )}
     </div>
   );
 }

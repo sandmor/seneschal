@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import { useNavigate } from '@tanstack/react-router';
 import type { AdminProfileResponse } from '@/features/auth/auth-api';
+import { isAdmin } from '@/features/auth/permissions';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -45,7 +46,7 @@ export function AuthPage() {
   const usersQuery = useQuery({
     queryKey: ['auth', 'users', token],
     queryFn: () => listUsers(),
-    enabled: isHydrated && Boolean(token),
+    enabled: isHydrated && Boolean(token) && isAdmin(profileQuery.data ?? null),
     retry: false,
   });
 
@@ -114,6 +115,7 @@ export function AuthPage() {
         profile={profile}
         users={usersQuery.data ?? []}
         usersError={usersQuery.error}
+        showUsers={isAdmin(profile)}
         notice={notice}
         isBusy={isBusy}
         onSignOut={handleSignOut}
@@ -293,6 +295,7 @@ function SessionView({
   profile,
   users,
   usersError,
+  showUsers,
   notice,
   isBusy,
   onSignOut,
@@ -300,6 +303,7 @@ function SessionView({
   profile: AdminProfileResponse;
   users: Array<{ id: number; name: string; roles: string[] }>;
   usersError: unknown;
+  showUsers: boolean;
   notice: string | null;
   isBusy: boolean;
   onSignOut: () => void;
@@ -347,47 +351,49 @@ function SessionView({
           </div>
         )}
 
-        <div className="rounded-xl border border-border bg-card p-6 shadow-sm">
-          <div className="mb-4 flex items-center justify-between">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-                Users
-              </p>
-              <h3 className="mt-1 text-base font-semibold text-foreground">Available accounts</h3>
+        {showUsers && (
+          <div className="rounded-xl border border-border bg-card p-6 shadow-sm">
+            <div className="mb-4 flex items-center justify-between">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                  Users
+                </p>
+                <h3 className="mt-1 text-base font-semibold text-foreground">Available accounts</h3>
+              </div>
+              <Badge variant="secondary">{users.length} loaded</Badge>
             </div>
-            <Badge variant="secondary">{users.length} loaded</Badge>
-          </div>
 
-          {usersError ? (
-            <p className="text-sm text-destructive">{getApiErrorMessage(usersError)}</p>
-          ) : (
-            <div className="space-y-2">
-              {users.map((user) => (
-                <div
-                  key={user.id}
-                  className="flex items-center justify-between gap-3 rounded-lg border border-border bg-background px-4 py-3"
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-semibold text-muted-foreground">
-                      {user.name.charAt(0)}
+            {usersError ? (
+              <p className="text-sm text-destructive">{getApiErrorMessage(usersError)}</p>
+            ) : (
+              <div className="space-y-2">
+                {users.map((user) => (
+                  <div
+                    key={user.id}
+                    className="flex items-center justify-between gap-3 rounded-lg border border-border bg-background px-4 py-3"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-semibold text-muted-foreground">
+                        {user.name.charAt(0)}
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium text-foreground">{user.name}</p>
+                        <p className="text-xs text-muted-foreground">User #{user.id}</p>
+                      </div>
                     </div>
-                    <div>
-                      <p className="text-sm font-medium text-foreground">{user.name}</p>
-                      <p className="text-xs text-muted-foreground">User #{user.id}</p>
+                    <div className="flex flex-wrap gap-1">
+                      {user.roles.map((role) => (
+                        <Badge key={`${user.id}-${role}`} variant="outline" className="text-[10px]">
+                          {role}
+                        </Badge>
+                      ))}
                     </div>
                   </div>
-                  <div className="flex flex-wrap gap-1">
-                    {user.roles.map((role) => (
-                      <Badge key={`${user.id}-${role}`} variant="outline" className="text-[10px]">
-                        {role}
-                      </Badge>
-                    ))}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );

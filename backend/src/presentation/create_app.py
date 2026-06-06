@@ -29,6 +29,7 @@ from src.domain.access_control import AccessLevel
 from src.domain.domain_errors import (
     AccessDeniedError,
     DirectoryNotEmptyError,
+    InvalidCollaborationSeedError,
     InvalidPathError,
     ResourceAlreadyExistsError,
     ResourceNotFoundError,
@@ -191,6 +192,12 @@ def create_app() -> FastAPI:
     @app.exception_handler(AccessDeniedError)
     async def handle_access_denied(_: Request, error: AccessDeniedError) -> JSONResponse:
         return _error_response(status.HTTP_403_FORBIDDEN, str(error))
+
+    @app.exception_handler(InvalidCollaborationSeedError)
+    async def handle_invalid_collaboration_seed(
+        _: Request, error: InvalidCollaborationSeedError
+    ) -> JSONResponse:
+        return _error_response(status.HTTP_400_BAD_REQUEST, str(error))
 
     return app
 

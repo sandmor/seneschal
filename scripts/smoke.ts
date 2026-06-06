@@ -265,7 +265,154 @@ async function exerciseAuthFlow(apiBaseUrl: string, authorizationHeaders: Author
     throw new Error('Expected created role to be present on created public user.');
   }
 
+  await exerciseRbacChecks(apiBaseUrl, authorizationHeaders, {
+    roleName,
+    username,
+    password: 'smoke-password',
+  });
+
   if (logout.status !== 'ok') {
     throw new Error(`Expected logout status 'ok', received '${logout.status}'.`);
   }
+}
+
+async function assertResponseStatus(
+  url: string,
+  expectedStatus: number,
+  headers: AuthorizationHeaders,
+  init?: RequestInit,
+) {
+  const response = await fetch(url, {
+    ...init,
+    headers: {
+      ...headers,
+      ...(init?.headers ?? {}),
+    },
+  });
+
+  if (response.status !== expectedStatus) {
+    const payload = await response.text();
+    throw new Error(
+      `Expected ${expectedStatus} from ${url}, received ${response.status}: ${payload}`,
+    );
+  }
+}
+
+async function exerciseRbacChecks(
+  apiBaseUrl: string,
+  adminHeaders: AuthorizationHeaders,
+  viewer: { roleName: string; username: string; password: string },
+) {
+  const smokeRunId = Date.now().toString(36);
+  const restrictedDir = `/smoke-rbac-${smokeRunId}`;
+  const restrictedDoc = `${restrictedDir}/restricted.md`;
+
+  await fetchJson(`${apiBaseUrl}/api/directories`, {
+    method: 'POST',
+    headers: {
+      ...adminHeaders,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ path: restrictedDir }),
+  });
+
+  await fetchJson(`${apiBaseUrl}/api/documents`, {
+    method: 'POST',
+    headers: {
+      ...adminHeaders,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      path: restrictedDoc,
+      content: '# Restricted\n\nSmoke test document.',
+    }),
+  });
+
+  const collabDoc = `${restrictedDir}/collab-test.md`;
+  const createdCollabDoc = await fetchJson<{ collaboration_id: string }>(
+    `${apiBaseUrl}/api/documents`,
+    {
+      method: 'POST',
+      headers: {
+        ...adminHeaders,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        path: collabDoc,
+        content: '# Collab\n\nRoom initialize smoke test.',
+      }),
+    },
+  );
+
+  await fetchJson(`${apiBaseUrl}/api/admin/access-control`, {
+    method: 'PUT',
+    headers: {
+      ...adminHeaders,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      path: restrictedDoc,
+      kind: 'document',
+      default_access: 'none',
+      role_overrides: {
+        [viewer.roleName]: 'none',
+      },
+    }),
+  });
+
+  const viewerLogin = await fetchJson<LoginResponse>(`${apiBaseUrl}/api/auth/login`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      username: viewer.username,
+      password: viewer.password,
+    }),
+  });
+
+  const viewerHeaders: AuthorizationHeaders = {
+    Authorization: `Bearer ${viewerLogin.token}`,
+  };
+
+  await assertResponseStatus(`${apiBaseUrl}/api/users`, 403, viewerHeaders);
+  await assertResponseStatus(
+    `${apiBaseUrl}/api/documents/export-pdf?path=${encodeURIComponent(restrictedDoc)}`,
+    403,
+    viewerHeaders,
+  );
+  await assertResponseStatus(`${apiBaseUrl}/api/directories`, 403, viewerHeaders, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ path: `${restrictedDir}/nested` }),
+  });
+
+  const initializeBody = JSON.stringify({ seed: 'YQ==' });
+  await assertResponseStatus(
+    `${apiBaseUrl}/api/rooms/${createdCollabDoc.collaboration_id}/initialize`,
+    403,
+    viewerHeaders,
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: initializeBody,
+    },
+  );
+
+  await assertResponseStatus(
+    `${apiBaseUrl}/api/rooms/${createdCollabDoc.collaboration_id}/initialize`,
+    400,
+    adminHeaders,
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: initializeBody,
+    },
+  );
 }

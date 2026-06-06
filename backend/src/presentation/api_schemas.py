@@ -43,6 +43,7 @@ NodeResponse = Annotated[DirectoryNodeResponse | DocumentNodeResponse, Field(dis
 
 class DirectoryResponse(DirectoryNodeResponse):
     children: list[NodeResponse]
+    access_level: AccessLevel
 
 
 class DocumentResponse(DocumentNodeResponse):
@@ -90,6 +91,7 @@ class AdminProfileResponse(BaseModel):
     role: str
     roles: list[str]
     permissions: list[str]
+    is_superadmin: bool
 
     @classmethod
     def from_domain(cls, profile: AuthenticatedPrincipal) -> "AdminProfileResponse":
@@ -99,6 +101,7 @@ class AdminProfileResponse(BaseModel):
             role=profile.role,
             roles=profile.roles,
             permissions=profile.permissions,
+            is_superadmin=profile.is_superadmin,
         )
 
 
@@ -219,6 +222,7 @@ def serialize_directory(
     detail: DirectoryDetail,
     *,
     collaboration_id_store: CollaborationIdStore,
+    access_level: AccessLevel,
 ) -> DirectoryResponse:
     directory = serialize_directory_entry(detail.directory)
     children: list[NodeResponse] = []
@@ -230,7 +234,11 @@ def serialize_directory(
             collab_id = collaboration_id_store.get_or_create(child.path.value)
             children.append(serialize_document_entry(child, collab_id))
 
-    return DirectoryResponse(**directory.model_dump(), children=children)
+    return DirectoryResponse(
+        **directory.model_dump(),
+        children=children,
+        access_level=access_level,
+    )
 
 
 def serialize_document(

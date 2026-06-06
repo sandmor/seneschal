@@ -8,6 +8,8 @@ from fastapi import WebSocket, WebSocketDisconnect
 from pycrdt import Channel
 from pycrdt.websocket import WebsocketServer
 
+from src.domain.domain_errors import InvalidCollaborationSeedError
+
 logger = logging.getLogger("seneschal.websocket")
 
 
@@ -91,7 +93,11 @@ class DocumentCollaborationHandler:
             # get_room() automatically creates and registers the Room if it doesn't exist
             room = await self._websocket_server.get_room(collaboration_id)
 
-            room.ydoc.apply_update(seed)
+            try:
+                room.ydoc.apply_update(seed)
+            except ValueError as error:
+                logger.warning("Invalid Yjs seed for room %s", collaboration_id)
+                raise InvalidCollaborationSeedError("Invalid Yjs seed.") from error
 
             self._initialized_rooms.add(collaboration_id)
             return {"status": "created"}

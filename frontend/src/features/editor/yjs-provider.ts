@@ -17,76 +17,67 @@ const SEED_REQUIRE_CLOSE_CODE = 4001;
 const TAB_LOCK_PREFIX = 'seneschal.collaboration.lock.';
 const TAB_LOCK_TIMEOUT_MS = 10_000;
 
+export class CollaborationInitError extends Error {
+  constructor(message = 'Collaboration room failed to initialize.') {
+    super(message);
+    this.name = 'CollaborationInitError';
+  }
+}
+
 export type YjsProviderOptions = {
   collaborationId: string;
   token?: string;
   initialContent: string;
+  /** When true, the caller may POST initialize with a client-built seed (writers only). */
+  canInitialize: boolean;
+  /** When set, used to build seeds on recovery instead of stale initialContent. */
+  getSeedContent?: () => Promise<string>;
 };
 
 export type YjsProviderResult = {
-  ydoc: Y.Doc;
-  provider: WebsocketProvider;
+  ydoc: Y.Doc | undefined;
+  provider: WebsocketProvider | undefined;
+  /** False when read-only and the room has not been initialized yet. */
+  collaborationActive: boolean;
 };
+
+type RequestAuthOptions = Parameters<
+  typeof checkRoomStatusEndpointApiRoomsCollaborationIdStatusGet
+>[1];
+
+function buildAuthOptions(token?: string): RequestAuthOptions | undefined {
+  if (!token) return undefined;
+  return { headers: { Authorization: `Bearer ${token}` } };
+}
 
 export async function createYjsProvider({
   collaborationId,
   token,
   initialContent,
+  canInitialize,
+  getSeedContent,
 }: YjsProviderOptions): Promise<YjsProviderResult> {
-  const ydoc = new Y.Doc();
+  const authOptions = buildAuthOptions(token);
+  const resolveSeedContent = getSeedContent ?? (async () => initialContent);
 
-  // Convert http(s) API URL to ws(s) WebSocket URL
+  const roomExists = await isRoomInitialized(collaborationId, authOptions);
+
+  if (!roomExists) {
+    if (!canInitialize) {
+      return { ydoc: undefined, provider: undefined, collaborationActive: false };
+    }
+
+    await ensureRoomInitialized(collaborationId, resolveSeedContent, authOptions);
+  }
+
+  if (!(await isRoomInitialized(collaborationId, authOptions))) {
+    throw new CollaborationInitError();
+  }
+
+  const ydoc = new Y.Doc();
   const wsBaseUrl = resolveBaseUrl().replace(/^http/, 'ws');
   const wsUrl = `${wsBaseUrl}/api/documents/yjs`;
 
-  // Check room status using the generated orval client.
-  const statusResponse = await checkRoomStatusEndpointApiRoomsCollaborationIdStatusGet(
-    collaborationId,
-    token ? { headers: { Authorization: `Bearer ${token}` } } : undefined,
-  );
-  const roomExists =
-    'data' in statusResponse &&
-    statusResponse.data !== undefined &&
-    (statusResponse.data as { initialized?: boolean }).initialized === true;
-
-  if (!roomExists) {
-    // Coordinate across tabs so only one tab initializes the room.
-    const lockKey = `${TAB_LOCK_PREFIX}${collaborationId}`;
-    const acquired = await acquireTabLock(lockKey, TAB_LOCK_TIMEOUT_MS);
-
-    if (acquired) {
-      try {
-        // Double-check status after acquiring the lock (another tab may have initialized).
-        const secondCheck = await checkRoomStatusEndpointApiRoomsCollaborationIdStatusGet(
-          collaborationId,
-          token ? { headers: { Authorization: `Bearer ${token}` } } : undefined,
-        );
-        const stillNotInitialized =
-          'data' in secondCheck &&
-          secondCheck.data !== undefined &&
-          (secondCheck.data as { initialized?: boolean }).initialized !== true;
-
-        if (stillNotInitialized) {
-          const seed = createSeed(initialContent);
-          const base64Seed = arrayBufferToBase64(seed);
-          const requestBody: InitializeRoomRequest = { seed: base64Seed };
-          await initializeRoomEndpointApiRoomsCollaborationIdInitializePost(
-            collaborationId,
-            requestBody,
-            token ? { headers: { Authorization: `Bearer ${token}` } } : undefined,
-          );
-        }
-      } finally {
-        releaseTabLock(lockKey);
-      }
-    } else {
-      // Another tab is initializing; wait briefly and then proceed.
-      await waitForTabLock(lockKey, TAB_LOCK_TIMEOUT_MS);
-    }
-  }
-
-  // Create the y-websocket provider and connect.
-  // At this point the room is guaranteed to exist on the server.
   const provider = new WebsocketProvider(wsUrl, collaborationId, ydoc, {
     params: token ? { token } : {},
     protocols: ['y-websocket'],
@@ -95,13 +86,92 @@ export async function createYjsProvider({
     maxBackoffTime: 10000,
   });
 
-  // Handle server-side room loss (e.g. server restart) by re-initializing and reconnecting.
-  setupRoomRecovery(provider, collaborationId, initialContent, token);
+  if (canInitialize) {
+    setupRoomRecovery(provider, collaborationId, resolveSeedContent, token);
+  }
 
   provider.awareness.setLocalStateField('user', createPresenceUser(token));
   bindPresenceCleanup(provider);
 
-  return { ydoc, provider };
+  return { ydoc, provider, collaborationActive: true };
+}
+
+async function isRoomInitialized(
+  collaborationId: string,
+  authOptions: RequestAuthOptions | undefined,
+): Promise<boolean> {
+  const statusResponse = await checkRoomStatusEndpointApiRoomsCollaborationIdStatusGet(
+    collaborationId,
+    authOptions,
+  );
+  return (
+    'data' in statusResponse &&
+    statusResponse.data !== undefined &&
+    (statusResponse.data as { initialized?: boolean }).initialized === true
+  );
+}
+
+async function ensureRoomInitialized(
+  collaborationId: string,
+  resolveSeedContent: () => Promise<string>,
+  authOptions: RequestAuthOptions | undefined,
+): Promise<void> {
+  if (await isRoomInitialized(collaborationId, authOptions)) {
+    return;
+  }
+
+  const lockKey = `${TAB_LOCK_PREFIX}${collaborationId}`;
+  const acquired = await acquireTabLock(lockKey, TAB_LOCK_TIMEOUT_MS);
+
+  if (acquired) {
+    try {
+      if (!(await isRoomInitialized(collaborationId, authOptions))) {
+        const content = await resolveSeedContent();
+        await postRoomInitialize(collaborationId, content, authOptions);
+      }
+    } finally {
+      releaseTabLock(lockKey);
+    }
+    return;
+  }
+
+  await waitForTabLock(lockKey, TAB_LOCK_TIMEOUT_MS);
+  if (await isRoomInitialized(collaborationId, authOptions)) {
+    return;
+  }
+
+  const retryAcquired = await acquireTabLock(lockKey, TAB_LOCK_TIMEOUT_MS);
+  if (!retryAcquired) {
+    await waitForTabLock(lockKey, TAB_LOCK_TIMEOUT_MS);
+    if (await isRoomInitialized(collaborationId, authOptions)) {
+      return;
+    }
+    throw new CollaborationInitError();
+  }
+
+  try {
+    if (!(await isRoomInitialized(collaborationId, authOptions))) {
+      const content = await resolveSeedContent();
+      await postRoomInitialize(collaborationId, content, authOptions);
+    }
+  } finally {
+    releaseTabLock(lockKey);
+  }
+}
+
+async function postRoomInitialize(
+  collaborationId: string,
+  initialContent: string,
+  authOptions: RequestAuthOptions | undefined,
+): Promise<void> {
+  const seed = createSeed(initialContent);
+  const base64Seed = arrayBufferToBase64(seed);
+  const requestBody: InitializeRoomRequest = { seed: base64Seed };
+  await initializeRoomEndpointApiRoomsCollaborationIdInitializePost(
+    collaborationId,
+    requestBody,
+    authOptions,
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -135,7 +205,7 @@ function createSeed(initialContent: string): Uint8Array {
 function setupRoomRecovery(
   provider: WebsocketProvider,
   collaborationId: string,
-  initialContent: string,
+  resolveSeedContent: () => Promise<string>,
   token?: string,
 ) {
   let recovering = false;
@@ -146,17 +216,10 @@ function setupRoomRecovery(
       recovering = true;
       provider.disconnect();
 
-      // Re-run the initialization flow and then reconnect.
       void (async () => {
         try {
-          const seed = createSeed(initialContent);
-          const base64Seed = arrayBufferToBase64(seed);
-          const requestBody: InitializeRoomRequest = { seed: base64Seed };
-          await initializeRoomEndpointApiRoomsCollaborationIdInitializePost(
-            collaborationId,
-            requestBody,
-            token ? { headers: { Authorization: `Bearer ${token}` } } : undefined,
-          );
+          const content = await resolveSeedContent();
+          await postRoomInitialize(collaborationId, content, buildAuthOptions(token));
         } catch (error) {
           console.error('Failed to re-initialize room after server restart:', error);
         } finally {
@@ -183,7 +246,6 @@ function setupRoomRecovery(
 function acquireTabLock(key: string, timeoutMs: number): Promise<boolean> {
   return new Promise((resolve) => {
     if (typeof window === 'undefined' || typeof BroadcastChannel === 'undefined') {
-      // Fallback: use localStorage timestamp-based lock
       resolve(acquireLocalStorageLock(key, timeoutMs));
       return;
     }
@@ -211,7 +273,6 @@ function acquireTabLock(key: string, timeoutMs: number): Promise<boolean> {
       }
     };
 
-    // Attempt to acquire lock via localStorage first
     if (acquireLocalStorageLock(key, timeoutMs)) {
       channel.postMessage({ type: 'lock-acquired', id: myId });
       if (!resolved) {
@@ -274,7 +335,7 @@ function acquireLocalStorageLock(key: string, timeoutMs: number): boolean {
   if (raw) {
     const timestamp = parseInt(raw, 10);
     if (!Number.isNaN(timestamp) && now - timestamp < timeoutMs) {
-      return false; // Lock is held by another tab
+      return false;
     }
   }
 

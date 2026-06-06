@@ -41,8 +41,11 @@ import {
 } from '@/features/document-browser/path-utils';
 import { createYjsProvider } from '@/features/editor/yjs-provider';
 import { getStoredAuthToken } from '@/features/auth/auth-api';
+import { canWriteDirectory, isAdmin } from '@/features/auth/permissions';
 import { cn } from '@/lib/utils';
 import { resolveBaseUrl } from '@/lib/orval-client';
+import { useGetProfileApiAuthMeGet } from '@/api/endpoints/api';
+import type { AdminProfileResponse } from '@/api/models/adminProfileResponse';
 
 export type ExplorerShellProps = {
   directoryPath: string;
@@ -83,6 +86,9 @@ export function ExplorerShell({ directoryPath, documentPath }: ExplorerShellProp
   const [ydoc, setYdoc] = useState<Y.Doc | undefined>(undefined);
   const [provider, setProvider] = useState<WebsocketProvider | undefined>(undefined);
   const [isYjsSynced, setIsYjsSynced] = useState(false);
+  const [collaborationActive, setCollaborationActive] = useState(false);
+  const [yjsReady, setYjsReady] = useState(false);
+  const [collaborationFailed, setCollaborationFailed] = useState(false);
   const [isReadOnly, setIsReadOnly] = useState(false);
   const yjsCleanupRef = useRef<(() => void) | null>(null);
 
@@ -92,6 +98,10 @@ export function ExplorerShell({ directoryPath, documentPath }: ExplorerShellProp
     select: (res) =>
       res && 'status' in res && res.status === 200 ? (res.data as DirectoryResponse) : undefined,
   });
+
+  const profileQuery = useGetProfileApiAuthMeGet();
+  const profile = profileQuery.data?.data as AdminProfileResponse | undefined;
+  const adminUser = isAdmin(profile);
 
   const documentQuery = useQuery({
     queryKey: documentQueryKey({ path: documentPath ?? '' }),
@@ -103,6 +113,7 @@ export function ExplorerShell({ directoryPath, documentPath }: ExplorerShellProp
 
   const currentDirectory = directoryQuery.data;
   const selectedDocument = documentQuery.data;
+  const canWriteCurrentDirectory = canWriteDirectory(currentDirectory);
   const breadcrumbs = useMemo(() => getBreadcrumbs(directoryPath), [directoryPath]);
   const rootDocumentsBlocked = directoryPath === '/';
 
@@ -131,44 +142,89 @@ export function ExplorerShell({ directoryPath, documentPath }: ExplorerShellProp
       setYdoc(undefined);
       setProvider(undefined);
       setIsYjsSynced(false);
+      setCollaborationActive(false);
+      setYjsReady(false);
+      setCollaborationFailed(false);
       return;
     }
 
+    setYjsReady(false);
+    setCollaborationFailed(false);
+
     const collaborationId = selectedDocument.collaboration_id;
+    const documentPath = selectedDocument.path;
     const initialContent = selectedDocument.content;
+    const canInitialize = selectedDocument.access_level === 'write';
 
     (async () => {
       try {
-        const { ydoc: newYdoc, provider: newProvider } = await createYjsProvider({
+        const {
+          ydoc: newYdoc,
+          provider: newProvider,
+          collaborationActive: active,
+        } = await createYjsProvider({
           collaborationId,
           token: getStoredAuthToken() ?? undefined,
           initialContent,
+          canInitialize,
+          getSeedContent: async () => {
+            const response = await getDocument({ path: documentPath });
+            if (response.status !== 200) {
+              throw new Error('Failed to refresh document content for collaboration.');
+            }
+            return (response.data as DocumentResponse).content;
+          },
         });
 
         if (cancelled) {
-          newProvider.destroy();
-          newYdoc.destroy();
+          newProvider?.destroy();
+          newYdoc?.destroy();
+          return;
+        }
+
+        if (!active) {
+          setYdoc(undefined);
+          setProvider(undefined);
+          setIsYjsSynced(true);
+          setCollaborationActive(false);
+          setYjsReady(true);
           return;
         }
 
         setYdoc(newYdoc);
         setProvider(newProvider);
-        setIsYjsSynced(newProvider.synced);
+        setCollaborationActive(true);
+        setIsYjsSynced(newProvider!.synced);
+        setYjsReady(true);
 
         const handleSync = (isSynced: boolean) => {
           setIsYjsSynced(isSynced);
         };
-        newProvider.on('sync', handleSync);
+        newProvider!.on('sync', handleSync);
 
         yjsCleanupRef.current = () => {
-          newProvider.off('sync', handleSync);
-          newProvider.destroy();
-          newYdoc.destroy();
+          newProvider!.off('sync', handleSync);
+          newProvider!.destroy();
+          newYdoc!.destroy();
         };
       } catch (error) {
         if (!cancelled) {
           console.error('Failed to create Yjs provider:', error);
-          setStatus({ message: 'Collaboration connection failed.', tone: 'error' });
+          setYdoc(undefined);
+          setProvider(undefined);
+          setCollaborationActive(false);
+          setIsYjsSynced(true);
+          setYjsReady(true);
+          if (canInitialize) {
+            setCollaborationFailed(true);
+            setStatus({
+              message:
+                'Collaboration is unavailable. The document is read-only until the connection succeeds.',
+              tone: 'error',
+            });
+          } else {
+            setStatus({ message: 'Collaboration connection failed.', tone: 'error' });
+          }
         }
       }
     })();
@@ -180,7 +236,7 @@ export function ExplorerShell({ directoryPath, documentPath }: ExplorerShellProp
         yjsCleanupRef.current = null;
       }
     };
-  }, [selectedDocument?.collaboration_id]);
+  }, [selectedDocument?.collaboration_id, selectedDocument?.access_level, selectedDocument?.path]);
 
   // Update document state when document is selected
   useEffect(() => {
@@ -211,7 +267,8 @@ export function ExplorerShell({ directoryPath, documentPath }: ExplorerShellProp
 
   // Auto-save: content changes
   useEffect(() => {
-    if (!selectedDocument || !hasUnsavedChangesRef.current || isReadOnly) return;
+    if (!selectedDocument || !hasUnsavedChangesRef.current || isReadOnly || collaborationFailed)
+      return;
 
     // Save Leader Election: only the client with the lowest clientID saves to the backend
     if (provider) {
@@ -681,8 +738,11 @@ export function ExplorerShell({ directoryPath, documentPath }: ExplorerShellProp
     />
   );
 
+  const awaitingCollaborationSync =
+    Boolean(selectedDocument) && (!yjsReady || (collaborationActive && !isYjsSynced));
+
   // Editor mode loading state
-  if (documentPath && (documentQuery.isPending || (selectedDocument && !isYjsSynced))) {
+  if (documentPath && (documentQuery.isPending || awaitingCollaborationSync)) {
     return (
       <AppShell sidebar={sidebarContent}>
         <DocumentEditorSkeleton documentPath={documentPath} />
@@ -691,7 +751,7 @@ export function ExplorerShell({ directoryPath, documentPath }: ExplorerShellProp
   }
 
   // Editor mode: full window
-  const editorView = documentPath && selectedDocument && isYjsSynced && (
+  const editorView = documentPath && selectedDocument && !awaitingCollaborationSync && (
     <DocumentEditor
       document={selectedDocument}
       documentName={documentName}
@@ -706,11 +766,11 @@ export function ExplorerShell({ directoryPath, documentPath }: ExplorerShellProp
       onDocumentContentChange={handleDocumentContentChange}
       onDelete={handleDeleteDocument}
       onExportPdf={handleExportPDF}
-      onOpenSettings={() => setInspectorOpen(true)}
+      onOpenSettings={adminUser ? () => setInspectorOpen(true) : undefined}
       onKeyDown={(e) => e.key === 'Enter' && e.currentTarget.blur()}
       ydoc={ydoc}
       provider={provider}
-      readOnly={isReadOnly}
+      readOnly={isReadOnly || collaborationFailed}
     />
   );
 
@@ -741,26 +801,33 @@ export function ExplorerShell({ directoryPath, documentPath }: ExplorerShellProp
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <div className="flex items-center gap-1.5">
-            <Input
-              value={newDirectoryName}
-              onChange={(e) => setNewDirectoryName(e.target.value)}
-              placeholder="New folder…"
-              className="h-8 w-36 text-xs"
-              onKeyDown={(e) => e.key === 'Enter' && handleCreateDirectory()}
-            />
-            <Button size="sm" variant="secondary" onClick={handleCreateDirectory} disabled={isBusy}>
-              <FolderPlusIcon className="h-3.5 w-3.5" />
-              Add
-            </Button>
-          </div>
-          {!rootDocumentsBlocked && (
+          {canWriteCurrentDirectory && (
+            <div className="flex items-center gap-1.5">
+              <Input
+                value={newDirectoryName}
+                onChange={(e) => setNewDirectoryName(e.target.value)}
+                placeholder="New folder…"
+                className="h-8 w-36 text-xs"
+                onKeyDown={(e) => e.key === 'Enter' && handleCreateDirectory()}
+              />
+              <Button
+                size="sm"
+                variant="secondary"
+                onClick={handleCreateDirectory}
+                disabled={isBusy}
+              >
+                <FolderPlusIcon className="h-3.5 w-3.5" />
+                Add
+              </Button>
+            </div>
+          )}
+          {canWriteCurrentDirectory && !rootDocumentsBlocked && (
             <Button size="sm" variant="secondary" onClick={handleCreateDocument} disabled={isBusy}>
               <FilePlusIcon className="h-3.5 w-3.5" />
               New doc
             </Button>
           )}
-          {showDirInspector && (
+          {showDirInspector && canWriteCurrentDirectory && (
             <Button size="sm" variant="ghost" onClick={() => setInspectorOpen(true)}>
               Settings
             </Button>
@@ -843,12 +910,18 @@ export function ExplorerShell({ directoryPath, documentPath }: ExplorerShellProp
         title={documentPath ? 'Document settings' : 'Directory settings'}
       >
         {documentPath && selectedDocument ? (
-          <DocumentInspector document={selectedDocument} readOnly={isReadOnly} />
+          <DocumentInspector
+            document={selectedDocument}
+            readOnly={isReadOnly}
+            showAccessControl={adminUser}
+          />
         ) : currentDirectory ? (
           <DirectoryInspector
             directory={currentDirectory}
             directoryName={directoryName}
             isBusy={isBusy}
+            readOnly={!canWriteCurrentDirectory}
+            showAccessControl={adminUser}
             onDirectoryNameChange={setDirectoryName}
             onSave={handleUpdateDirectory}
             onDelete={handleDeleteDirectory}

@@ -4,6 +4,7 @@ import { useTheme } from '@/providers/theme-provider';
 import { cn } from '@/lib/utils';
 import { AdminConsole } from '@/features/rbac/admin-console';
 import { logout, getStoredAuthToken, storeAuthToken } from '@/features/auth/auth-api';
+import { isAdmin } from '@/features/auth/permissions';
 import { useGetProfileApiAuthMeGet } from '@/api/endpoints/api';
 import type { AdminProfileResponse } from '@/api/models/adminProfileResponse';
 
@@ -27,12 +28,7 @@ export function Sidebar({
   const [signingOut, setSigningOut] = useState(false);
   const profileQuery = useGetProfileApiAuthMeGet();
   const profile = profileQuery.data?.data as AdminProfileResponse | undefined;
-  const isAdmin = Boolean(
-    profile &&
-    (profile.permissions?.includes('admin') ||
-      profile.roles?.includes('admin') ||
-      profile.role === 'admin'),
-  );
+  const adminUser = isAdmin(profile);
   const navigate = useNavigate();
 
   const handleSignOut = async () => {
@@ -94,7 +90,7 @@ export function Sidebar({
         <div className="mx-3 h-px bg-border" />
 
         {/* Admin console button (it should only be visible to admin users) */}
-        {isAdmin && (
+        {adminUser && (
           <div className="px-3 py-2">
             <button
               type="button"
@@ -142,7 +138,7 @@ export function Sidebar({
         </div>
       </nav>
 
-      {isAdmin && <AdminConsole open={adminOpen} onClose={() => setAdminOpen(false)} />}
+      {adminUser && <AdminConsole open={adminOpen} onClose={() => setAdminOpen(false)} />}
     </>
   );
 }

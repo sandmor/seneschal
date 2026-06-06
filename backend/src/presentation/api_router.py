@@ -2,9 +2,8 @@ from __future__ import annotations
 
 import base64
 import logging
-from typing import Annotated
 
-from fastapi import APIRouter, Header, HTTPException, Query, Response, status, Depends
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 
 from src.application.access_control_service import AccessControlService
 from src.application.auth_service import AuthService
@@ -33,6 +32,7 @@ from src.presentation.api_schemas import (
     serialize_directory,
     serialize_document,
 )
+from src.presentation.auth_dependencies import create_auth_dependencies
 from src.presentation.websocket_handler import DocumentCollaborationHandler
 
 logger = logging.getLogger("seneschal.api")
@@ -47,33 +47,7 @@ def create_api_router(
     collaboration_handler: DocumentCollaborationHandler,
 ) -> APIRouter:
     router = APIRouter()
-
-    def get_token(authorization: Annotated[str | None, Header()] = None) -> str:
-        if not authorization:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Missing authorization header.",
-                headers={"WWW-Authenticate": "Bearer"},
-            )
-
-        scheme, _, token = authorization.partition(" ")
-        if scheme.lower() != "bearer" or not token:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid authorization header.",
-                headers={"WWW-Authenticate": "Bearer"},
-            )
-        return token
-
-    def require_current_principal(token: str = Depends(get_token)) -> AuthenticatedPrincipal:
-        try:
-            return auth_service.get_current_principal(token)
-        except InvalidCredentialsError as error:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid token.",
-                headers={"WWW-Authenticate": "Bearer"},
-            ) from error
+    get_token, require_current_principal, require_admin = create_auth_dependencies(auth_service)
 
     secured_router = APIRouter(dependencies=[Depends(require_current_principal)])
 
@@ -82,6 +56,15 @@ def create_api_router(
 
     def parse_document_path(raw_path: str) -> AbsolutePath:
         return AbsolutePath.parse(raw_path).ensure_document()
+
+    def resolve_document_path_for_room(collaboration_id: str) -> AbsolutePath:
+        document_path = collaboration_id_store.get_path(collaboration_id)
+        if document_path is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Collaboration room not found.",
+            )
+        return parse_document_path(document_path)
 
     @router.get("/health", tags=["system"])
     async def healthcheck() -> dict[str, str]:
@@ -116,7 +99,9 @@ def create_api_router(
         return AdminProfileResponse.from_domain(principal)
 
     @secured_router.get("/api/users", response_model=list[UserResponse], tags=["users"])
-    async def get_users() -> list[UserResponse]:
+    async def get_users(
+        _: AuthenticatedPrincipal = Depends(require_admin),
+    ) -> list[UserResponse]:
         users = user_service.list_users()
         logger.info("Listed %d users", len(users))
         return [UserResponse.from_domain(user) for user in users]
@@ -136,9 +121,15 @@ def create_api_router(
         )
         detail = service.get_directory(path)
         detail = access_control.filter_directory(detail, principal)
+        access_level = access_control.get_effective_access(
+            principal=principal,
+            path=directory_path,
+            kind=NodeKind.DIRECTORY,
+        )
         return serialize_directory(
             detail,
             collaboration_id_store=collaboration_id_store,
+            access_level=access_level,
         )
 
     @secured_router.post(
@@ -159,9 +150,11 @@ def create_api_router(
             kind=NodeKind.DIRECTORY,
             required=AccessLevel.WRITE,
         )
+        detail = service.create_directory(request.path)
         return serialize_directory(
-            service.create_directory(request.path),
+            detail,
             collaboration_id_store=collaboration_id_store,
+            access_level=AccessLevel.WRITE,
         )
 
     @secured_router.patch(
@@ -188,9 +181,16 @@ def create_api_router(
             required=AccessLevel.WRITE,
         )
         collaboration_id_store.rename_directory(path, request.new_path)
+        detail = service.rename_directory(path, request.new_path)
+        access_level = access_control.get_effective_access(
+            principal=principal,
+            path=destination_path,
+            kind=NodeKind.DIRECTORY,
+        )
         return serialize_directory(
-            service.rename_directory(path, request.new_path),
+            detail,
             collaboration_id_store=collaboration_id_store,
+            access_level=access_level,
         )
 
     @secured_router.delete(
@@ -316,6 +316,13 @@ def create_api_router(
         from src.application.pdf_service import generate_pdf
 
         logger.info("Export document as PDF: %s", path)
+        document_path = parse_document_path(path)
+        access_control.ensure_access(
+            principal=principal,
+            path=document_path,
+            kind=NodeKind.DOCUMENT,
+            required=AccessLevel.READ,
+        )
         detail = service.get_document(path)
         title = detail.document.path.name
         logger.info("Generating PDF for document: %s (title=%s)", path, title)
@@ -331,8 +338,18 @@ def create_api_router(
         response_model=RoomStatusResponse,
         tags=["rooms"],
     )
-    async def check_room_status_endpoint(collaboration_id: str) -> RoomStatusResponse:
+    async def check_room_status_endpoint(
+        collaboration_id: str,
+        principal: AuthenticatedPrincipal = Depends(require_current_principal),
+    ) -> RoomStatusResponse:
         logger.debug("Check room status: %s", collaboration_id)
+        document_path = resolve_document_path_for_room(collaboration_id)
+        access_control.ensure_access(
+            principal=principal,
+            path=document_path,
+            kind=NodeKind.DOCUMENT,
+            required=AccessLevel.READ,
+        )
         result = await collaboration_handler.check_room_status(collaboration_id)
         return RoomStatusResponse(**result)
 
@@ -344,8 +361,16 @@ def create_api_router(
     async def initialize_room_endpoint(
         collaboration_id: str,
         request: InitializeRoomRequest,
+        principal: AuthenticatedPrincipal = Depends(require_current_principal),
     ) -> InitializeRoomResponse:
         logger.info("Initialize room: %s", collaboration_id)
+        document_path = resolve_document_path_for_room(collaboration_id)
+        access_control.ensure_access(
+            principal=principal,
+            path=document_path,
+            kind=NodeKind.DOCUMENT,
+            required=AccessLevel.WRITE,
+        )
         try:
             seed = base64.b64decode(request.seed)
         except Exception as error:
@@ -354,6 +379,12 @@ def create_api_router(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Invalid base64 seed.",
             ) from error
+
+        if not seed or len(seed) > 1_048_576:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Seed must be non-empty and at most 1 MB.",
+            )
 
         result = await collaboration_handler.initialize_room(collaboration_id, seed)
         logger.info("Room %s initialized", collaboration_id)
